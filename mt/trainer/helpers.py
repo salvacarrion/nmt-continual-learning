@@ -6,16 +6,16 @@ from datasets import Dataset
 from mt.common import LitTokenizer
 
 
-def get_tokenizers(src, trg, datapath):
+def get_tokenizers(datapath, src, trg):
     # Define Tokenizers
     lt_src = LitTokenizer(padding=True, truncation=True, max_length=1024)
     lt_trg = LitTokenizer(padding=True, truncation=True, max_length=1024)
 
     # Load vocab
-    lt_src.load_vocab(os.path.join(datapath, f"{src}-vocab.json"),
-                      os.path.join(datapath, f"{src}-merges.txt"))
-    lt_trg.load_vocab(os.path.join(datapath, f"{trg}-vocab.json"),
-                      os.path.join(datapath, f"{trg}-merges.txt"))
+    lt_src.load_vocab(os.path.join(datapath, f"tok.{src}-vocab.json"),
+                      os.path.join(datapath, f"tok.{src}-merges.txt"))
+    lt_trg.load_vocab(os.path.join(datapath, f"tok.{trg}-vocab.json"),
+                      os.path.join(datapath, f"tok.{trg}-merges.txt"))
 
     return lt_src, lt_trg
 
@@ -26,7 +26,7 @@ def load_dataset(datapath, src, trg, splits=None):
 
     def load_from_text(split, lang):
         with open(os.path.join(datapath, f"{split}.{lang}"), 'r') as f:
-            lines = f.readlines()
+            lines = [l.strip() for l in f.readlines()]
             return lines
 
     def build_dataframe(split):
@@ -45,7 +45,8 @@ def load_dataset(datapath, src, trg, splits=None):
     print(f"Reading files... ({datapath})")
     datasets = {}
     for s in splits:
-        datasets[s] = build_dataframe(s)
+        df = build_dataframe(s)
+        datasets[s] = Dataset.from_pandas(df)
 
     return datasets
 

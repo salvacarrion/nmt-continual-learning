@@ -1,4 +1,4 @@
-from mt.old.tokenizers.tokenizer import LitTokenizer
+from mt.tok.tokenizer import LitTokenizer
 
 # Create tokenizer
 lt_src = LitTokenizer(padding=True, truncation=True, max_length=1024)
