@@ -1,0 +1,8 @@
+#fairseq==0.10.2  #c3d2beec96bd609f87d8da14cc2dffdbbd843b54
+https://github.com/pytorch/fairseq/archive/refs/heads/master.zip
+sacremoses==0.0.43
+tensorboardX==2.1
+pandas==1.2.3
+matplotlib==3.3.4
+seaborn==0.11.1
+jupyter==1.0.0
