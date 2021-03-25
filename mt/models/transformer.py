@@ -19,13 +19,15 @@ class LitTransformer(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         # training_step defined the train loop.
         # It is independent of forward
-        x, y = batch
+        src, src_mask, trg, trg_mask = batch
+        assert len(src) == len(src_mask)
+        assert len(trg) == len(trg_mask)
 
         # Predict
-        y_hat = self.model(x, y)
+        y_hat = self.model(src, trg, src_mask, trg_mask)
 
         # Logging to TensorBoard by default
-        loss = F.mse_loss(y_hat, y)
+        loss = F.nll_loss(y_hat, trg)
         self.log('train_loss', loss)
 
         return loss

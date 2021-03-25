@@ -1,6 +1,10 @@
 import os
 import pandas as pd
 
+import torch
+from torch.utils.data import DataLoader
+from torch.utils.data import random_split
+
 from datasets import Dataset
 
 from mt.common import LitTokenizer
@@ -8,8 +12,8 @@ from mt.common import LitTokenizer
 
 def get_tokenizers(datapath, src, trg):
     # Define Tokenizers
-    lt_src = LitTokenizer(padding=True, truncation=True, max_length=1024)
-    lt_trg = LitTokenizer(padding=True, truncation=True, max_length=1024)
+    lt_src = LitTokenizer(padding=True, truncation=True, max_length=1024, lang=src)
+    lt_trg = LitTokenizer(padding=True, truncation=True, max_length=1024, lang=trg)
 
     # Load vocab
     lt_src.load_vocab(os.path.join(datapath, f"tok.{src}-vocab.json"),
@@ -50,35 +54,48 @@ def load_dataset(datapath, src, trg, splits=None):
 
     return datasets
 
-#
-#  # Tokenize
-# def encode(examples):
-#     # Encode strings
-#     _src_tokenized = lt_src.tokenizer.encode_batch(examples[SRC_LANG])
-#     _trg_tokenized = lt_trg.tokenizer.encode_batch(examples[TRG_LANG])
-#
-#     # Select features
-#     src_tokenized = [{'ids': x.ids, 'attention_mask': x.attention_mask} for x in _src_tokenized]
-#     trg_tokenized = []
-#     for x in _trg_tokenized:
-#         mask = x.attention_mask
-#         mask[-1] = 0  # "Remove" <eos> for translation
-#         # lengths = len(x.attention_mask)  # needed due to padded inputs and masks
-#         trg_tokenized.append({'ids': x.ids, 'attention_mask': mask})  # , 'lengths': lengths
-#     new_examples = {'src': src_tokenized, 'trg': trg_tokenized}
-#     return new_examples
-#
-#
-# def collate_fn(examples):
-#     # Decompose examples
-#     _src = [x['src'] for x in examples]
-#     _trg = [x['trg'] for x in examples]
-#
-#     # Processed examples
-#     src = lt_trg.tokenizer.pad(_src, keys=['ids', 'attention_mask'])
-#     trg = lt_trg.tokenizer.pad(_trg, keys=['ids', 'attention_mask'])
-#
-#     # Convert list to PyTorch tensor
-#     new_examples = [torch.stack(src['ids']), torch.stack(src['attention_mask']),
-#                     torch.stack(trg['ids']), torch.stack(trg['attention_mask'])]
-#     return new_examples
+
+def build_dataloader(dataset, tok_src, tok_trg, batch_size=1, num_workers=0):
+    # Pre-process datasets (lazy)
+    ds = dataset.map(lambda x: encode(x, tok_src, tok_trg), batched=True)
+
+    # Dataset formats
+    ds.set_format(type='torch', columns=['src', 'trg'])
+
+    # Dataset to Pytorch DataLoader
+    ds_loader = torch.utils.data.DataLoader(ds, batch_size=batch_size, num_workers=num_workers,
+                                            collate_fn=lambda x: collate_fn(x, tok_src, tok_trg),
+                                            shuffle=True, pin_memory=True)
+    return ds_loader
+
+
+def encode(examples, tok_src, tok_trg):
+    # Encode strings
+    _src_tokenized = tok_src.tokenizer.encode_batch(examples[tok_src.lang])
+    _trg_tokenized = tok_trg.tokenizer.encode_batch(examples[tok_trg.lang])
+
+    # Select features
+    src_tokenized = [{'ids': x.ids, 'attention_mask': x.attention_mask} for x in _src_tokenized]
+    trg_tokenized = []
+    for x in _trg_tokenized:
+        mask = x.attention_mask
+        mask[-1] = 0  # "Remove" <eos> for translation
+        # lengths = len(x.attention_mask)  # needed due to padded inputs and masks
+        trg_tokenized.append({'ids': x.ids, 'attention_mask': mask})  # , 'lengths': lengths
+    new_examples = {'src': src_tokenized, 'trg': trg_tokenized}
+    return new_examples
+
+
+def collate_fn(examples, tok_src, tok_trg):
+    # Decompose examples
+    _src = [x['src'] for x in examples]
+    _trg = [x['trg'] for x in examples]
+
+    # Processed examples
+    src = tok_src.pad(_src, keys=['ids', 'attention_mask'])
+    trg = tok_trg.pad(_trg, keys=['ids', 'attention_mask'])
+
+    # Convert list to PyTorch tensor
+    new_examples = [torch.stack(src['ids']), torch.stack(src['attention_mask']),
+                    torch.stack(trg['ids']), torch.stack(trg['attention_mask'])]
+    return new_examples

@@ -11,7 +11,8 @@ from tokenizers.decoders import BPEDecoder as tok_decoder
 
 
 class LitTokenizer:
-    def __init__(self, padding=False, truncation=False, max_length=None):
+
+    def __init__(self, padding=False, truncation=False, max_length=None, lang=None):
         super().__init__()
         self.SOS_WORD = '[SOS]'
         self.EOS_WORD = '[EOS]'
@@ -23,6 +24,9 @@ class LitTokenizer:
         # Define tokenizer
         self.tokenizer = None
         self.configure_tokenizers(padding, truncation, max_length)
+
+        # Other
+        self.lang = lang
 
     def configure_tokenizers(self, padding, truncation, max_length):
         unk_idx = self.special_tokens.index(self.UNK_WORD)
@@ -62,30 +66,30 @@ class LitTokenizer:
     def save_vocab(self, output_dir, prefix):
         self.tokenizer.model.save(output_dir, prefix)
 
-    # def pad(self, examples, keys=None):
-    #     pad_idx = self.special_tokens.index(self.PAD_WORD)
-    #
-    #     # Keys to modify
-    #     if not keys:
-    #         keys = list(examples[0].keys())
-    #
-    #     d = {}
-    #     for k in keys:
-    #         # Collect same-type items
-    #         d[k] = [x[k] for x in examples]
-    #
-    #         # Get max length
-    #         max_length = max([x.shape[-1] for x in d[k]])
-    #
-    #         # Apply padding
-    #         for i, x in enumerate(examples):
-    #             unpadded_t = x[k]
-    #             if k == "ids":
-    #                 tmp = torch.full((max_length,), fill_value=pad_idx, device=unpadded_t.device)  # All padding
-    #             elif k == "attention_mask":
-    #                 tmp = torch.full((max_length,), fill_value=0, device=unpadded_t.device)  # No attention mask
-    #             else:
-    #                 raise TypeError("Unknown key")
-    #             tmp[:unpadded_t.shape[-1]] = unpadded_t
-    #             d[k][i] = tmp
-    #     return d
+    def pad(self, examples, keys=None):
+        pad_idx = self.special_tokens.index(self.PAD_WORD)
+
+        # Keys to modify
+        if not keys:
+            keys = list(examples[0].keys())
+
+        d = {}
+        for k in keys:
+            # Collect same-type items (list of IDs, list of masks,...)
+            d[k] = [x[k] for x in examples]
+
+            # Get max length (value to pad)
+            max_length = max([x.shape[-1] for x in d[k]])
+
+            # Apply padding
+            for i, x in enumerate(examples):
+                unpadded_t = x[k]
+                if k == "ids":
+                    tmp = torch.full((max_length,), fill_value=pad_idx, device=unpadded_t.device)  # All padding
+                elif k == "attention_mask":
+                    tmp = torch.full((max_length,), fill_value=0, device=unpadded_t.device)  # No attention mask
+                else:
+                    raise TypeError("Unknown key")
+                tmp[:unpadded_t.shape[-1]] = unpadded_t
+                d[k][i] = tmp
+        return d
