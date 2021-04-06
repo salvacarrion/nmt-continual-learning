@@ -4,7 +4,7 @@ from pathlib import Path
 from mt.preprocess import DATASETS_PATH, DATASET_SPLITS_NAME, VOCAB_SIZE
 from mt.preprocess import utils
 
-from mt.tok.lit_tokenizer import LitTokenizer
+from trainer.tok.lit_tokenizer import LitTokenizer
 
 
 # Get all folders in the root path

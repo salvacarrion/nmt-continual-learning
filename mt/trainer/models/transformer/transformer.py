@@ -228,7 +228,7 @@ class Transformer(nn.Module):
 
     def __init__(self, src_vocab_size, trg_vocab_size,
                  d_model=512,
-                 enc_layers=6, dec_layers=6,
+                 enc_layers=8, dec_layers=8,
                  enc_heads=8, dec_heads=8,
                  enc_dff_dim=2048, dec_dff_dim=2048,
                  enc_dropout=0.1, dec_dropout=0.1,
@@ -236,7 +236,8 @@ class Transformer(nn.Module):
         super().__init__()
 
         # Factor
-        d_model, enc_layers, enc_heads, enc_dff_dim, enc_dropout = d_model//2, enc_layers//2, enc_heads//2, enc_dff_dim//2, enc_dropout//2
+        factor = 2
+        d_model, enc_layers, enc_heads, enc_dff_dim, enc_dropout = d_model//factor, enc_layers//factor, enc_heads//factor, enc_dff_dim//factor, enc_dropout//factor
 
         self.encoder = Encoder(src_vocab_size, d_model, enc_layers, enc_heads, enc_dff_dim, enc_dropout, max_src_len)
         self.decoder = Decoder(trg_vocab_size, d_model, dec_layers, dec_heads, dec_dff_dim, dec_dropout, max_trg_len)

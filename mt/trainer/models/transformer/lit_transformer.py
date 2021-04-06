@@ -1,14 +1,10 @@
-import os
-from collections import defaultdict
 import math
 
 import torch
 from torch import nn
-import torch.nn.functional as F
 import pytorch_lightning as pl
-import sacrebleu
 
-from mt.models.transformer import Transformer
+from mt.trainer.models.transformer.transformer import Transformer
 
 
 def init_weights(m):
@@ -29,7 +25,7 @@ class LitTransformer(pl.LightningModule):
         self.transformer = Transformer(self.src_tok.get_vocab_size(), self.trg_tok.get_vocab_size())
 
         # Initialize weights
-        self.transformer.apply(init_weights)
+        self.apply(init_weights)
 
         # Set loss (ignore when the target token is <pad>)
         pad_idx = self.trg_tok.word2idx[lt_trg.PAD_WORD]

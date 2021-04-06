@@ -1,16 +1,13 @@
-import math
 import os
 import pandas as pd
-import numpy as np
 
 import torch
 from torch.utils.data import DataLoader
-from torch.utils.data import random_split
 
 from datasets import Dataset
 
-from mt.tok.lit_tokenizer import LitTokenizer
-from mt.tok.fastbpe_tokenizer import FastBPETokenizer
+from trainer.tok.lit_tokenizer import LitTokenizer
+from trainer.tok.fastbpe_tokenizer import FastBPETokenizer
 
 
 def get_tokenizers(datapath, src, trg, use_fastbpe):
@@ -88,10 +85,15 @@ def load_dataset(datapath, src, trg, splits=None):
 
 
 def build_dataloader(dataset, tok_src, tok_trg, batch_size=1, max_tokens=4000, num_workers=0, shuffle=True):
-    from mt.tok.fastbpe_tokenizer import encode, collate_fn
+    from trainer.tok.fastbpe_tokenizer import encode, collate_fn
+    from trainer.tok import fastbpe_tokenizer
 
     # Pre-process datasets (lazy), encode=static method
-    ds = dataset.map(lambda x: encode(x, tok_src, tok_trg), batched=True)
+    fastbpe_tokenizer.apply_bpe = True
+    fastbpe_tokenizer.tok_src = tok_src
+    fastbpe_tokenizer.tok_trg = tok_trg
+    ds = dataset.map(encode, batched=True)
+    # ds = dataset.map(lambda x: encode(x, tok_src, tok_trg), batched=True)
 
     # Dataset formats
     ds.set_format(type='torch', columns=['src', 'trg'])

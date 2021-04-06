@@ -6,7 +6,13 @@ import numpy as np
 import fastBPE
 
 
-def encode(examples, tok_src, tok_trg, apply_bpe=False):
+# def encode(examples, tok_src, tok_trg, apply_bpe=False):
+apply_bpe = None
+tok_src = None
+tok_trg = None
+
+
+def encode(examples):
     # Apply BPE if needed
     src_tokenized, trg_tokenized = examples['src'], examples['trg']
     if apply_bpe:
