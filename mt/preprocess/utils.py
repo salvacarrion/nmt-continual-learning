@@ -38,6 +38,9 @@ def get_dataset_ids(dataset_path):
     # Get basename of the path
     basename = os.path.basename(os.path.normpath(dataset_path))
 
+    # Remove stuff
+    #basename = basename.replace("tmp_", "")
+
     # Split basename
     domain, langs = basename.split("_")
     src, trg = langs.split("-")

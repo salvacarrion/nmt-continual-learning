@@ -11,9 +11,10 @@ from mt.common import LitTokenizer
 
 
 def get_tokenizers(datapath, src, trg):
-    # Define Tokenizers
-    lt_src = LitTokenizer(padding=True, truncation=True, max_length=1024, lang=src)
-    lt_trg = LitTokenizer(padding=True, truncation=True, max_length=1024, lang=trg)
+    # Define Tokenizer
+    # Do not use padding here. Datasets are preprocessed before batching
+    lt_src = LitTokenizer(padding=False, truncation=False, max_length=5000, lang=src)
+    lt_trg = LitTokenizer(padding=False, truncation=False, max_length=5000, lang=trg)
 
     # Load vocab
     lt_src.load_vocab(os.path.join(datapath, f"tok.{src}-vocab.json"),
@@ -41,8 +42,8 @@ def load_dataset(datapath, src, trg, splits=None):
         assert len(lines_src) == len(lines_trg)
 
         # Create pandas Dataframe
-        data = {src: lines_src, trg: lines_trg}
-        df = pd.DataFrame(data, columns=[src, trg])
+        data = {'src': lines_src, 'trg': lines_trg}
+        df = pd.DataFrame(data, columns=['src', 'trg'])
         return df
 
     # Load datasets
@@ -71,10 +72,10 @@ def build_dataloader(dataset, tok_src, tok_trg, batch_size=1, num_workers=0):
 
 def encode(examples, tok_src, tok_trg):
     # Encode strings
-    _src_tokenized = tok_src.tokenizer.encode_batch(examples[tok_src.lang])
-    _trg_tokenized = tok_trg.tokenizer.encode_batch(examples[tok_trg.lang])
+    _src_tokenized = tok_src.tokenizer.encode_batch(examples['src'])
+    _trg_tokenized = tok_trg.tokenizer.encode_batch(examples['trg'])
 
-    # Select features
+    # Remove other params (there are problems with PyArrow)
     src_tokenized = [{'ids': x.ids, 'attention_mask': x.attention_mask} for x in _src_tokenized]
     trg_tokenized = []
     for x in _trg_tokenized:

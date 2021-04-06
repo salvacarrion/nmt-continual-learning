@@ -8,6 +8,7 @@ from tokenizers.pre_tokenizers import Punctuation, Whitespace, WhitespaceSplit
 from tokenizers.models import BPE as tok_model
 from tokenizers.trainers import BpeTrainer as tok_trainer
 from tokenizers.decoders import BPEDecoder as tok_decoder
+from tokenizers.processors import TemplateProcessing
 
 
 class LitTokenizer:
@@ -43,12 +44,22 @@ class LitTokenizer:
         else:
             raise ValueError("Unknown padding type")
 
+        # Define template (Needed for the sos/eos tokens)
+        basic_template = TemplateProcessing(
+            single=f"{self.SOS_WORD} $A {self.EOS_WORD}",
+            pair=f"{self.SOS_WORD} $A {self.EOS_WORD} {self.SOS_WORD} $B {self.EOS_WORD}",
+            special_tokens=[(self.SOS_WORD, self.special_tokens.index(self.SOS_WORD)),
+                            (self.EOS_WORD, self.special_tokens.index(self.EOS_WORD))],
+        )
+
         # SRC tokenizer
         self.tokenizer = Tokenizer(tok_model())  # unk_token=... not working
         self.tokenizer.add_special_tokens(self.special_tokens)
         self.tokenizer.pre_tokenizer = pre_tokenizers.Sequence([Punctuation(), WhitespaceSplit()])
         self.tokenizer.normalizer = normalizers.Sequence([NFD(), Strip()])  # StripAccents requires NFD
         self.tokenizer.decoder = tok_decoder()
+        self.tokenizer.post_processor = basic_template
+
         if padding:
             self.tokenizer.enable_padding(pad_id=pad_idx, pad_token=self.PAD_WORD, length=pad_length)
         if truncation:
