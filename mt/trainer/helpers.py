@@ -1,5 +1,7 @@
+import math
 import os
 import pandas as pd
+import numpy as np
 
 import torch
 from torch.utils.data import DataLoader
@@ -7,21 +9,50 @@ from torch.utils.data import random_split
 
 from datasets import Dataset
 
-from mt.common import LitTokenizer
+from mt.tok.lit_tokenizer import LitTokenizer
+from mt.tok.fastbpe_tokenizer import FastBPETokenizer
 
 
-def get_tokenizers(datapath, src, trg):
+def get_tokenizers(datapath, src, trg, use_fastbpe):
     # Define Tokenizer
-    # Do not use padding here. Datasets are preprocessed before batching
-    lt_src = LitTokenizer(padding=False, truncation=False, max_length=5000, lang=src)
-    lt_trg = LitTokenizer(padding=False, truncation=False, max_length=5000, lang=trg)
+    if use_fastbpe:
+        lt_src = FastBPETokenizer(padding=False, truncation=False, max_length=5000, lang=src)
+        lt_trg = FastBPETokenizer(padding=False, truncation=False, max_length=5000, lang=trg)
 
-    # Load vocab
-    lt_src.load_vocab(os.path.join(datapath, f"tok.{src}-vocab.json"),
-                      os.path.join(datapath, f"tok.{src}-merges.txt"))
-    lt_trg.load_vocab(os.path.join(datapath, f"tok.{trg}-vocab.json"),
-                      os.path.join(datapath, f"tok.{trg}-merges.txt"))
+        # Load vocab
+        lt_src.load_vocab(os.path.join(datapath, f"codes.{src}"),
+                          os.path.join(datapath, f"vocab.32000.{src}"))
+        lt_trg.load_vocab(os.path.join(datapath, f"codes.{trg}"),
+                          os.path.join(datapath, f"vocab.32000.{trg}"))
+    else:
+        # Do not use padding here. Datasets are preprocessed before batching
+        lt_src = LitTokenizer(padding=False, truncation=False, max_length=5000, lang=src)
+        lt_trg = LitTokenizer(padding=False, truncation=False, max_length=5000, lang=trg)
 
+        # Load vocab
+        lt_src.load_vocab(os.path.join(datapath, f"tok.{src}-vocab.json"),
+                          os.path.join(datapath, f"tok.{src}-merges.txt"))
+        lt_trg.load_vocab(os.path.join(datapath, f"tok.{trg}-vocab.json"),
+                          os.path.join(datapath, f"tok.{trg}-merges.txt"))
+
+    # # Sanity check
+    # text_src = "Hola mundo!"
+    # text_src_enc = lt_src.encode(text_src)
+    # text_src_dec = lt_src.decode(text_src_enc.ids)
+    # print(f"Source tokenizer")
+    # print(f"\tRaw text: {text_src}")
+    # print(f"\tEncoded text: {text_src_enc.tokens}")
+    # print(f"\tDecoded text: {text_src_dec}")
+    # print("")
+    #
+    # text_trg = "Hello world!"
+    # text_trg_enc = lt_trg.encode(text_trg)
+    # text_trg_dec = lt_trg.decode(text_trg_enc.ids)
+    # print(f"Target tokenizer")
+    # print(f"\tRaw text: {text_trg}")
+    # print(f"\tEncoded text: {text_trg_enc.tokens}")
+    # print(f"\tDecoded text: {text_trg_dec}")
+    # print("")
     return lt_src, lt_trg
 
 
@@ -56,8 +87,10 @@ def load_dataset(datapath, src, trg, splits=None):
     return datasets
 
 
-def build_dataloader(dataset, tok_src, tok_trg, batch_size=1, num_workers=0):
-    # Pre-process datasets (lazy)
+def build_dataloader(dataset, tok_src, tok_trg, batch_size=1, max_tokens=4000, num_workers=0, shuffle=True):
+    from mt.tok.fastbpe_tokenizer import encode, collate_fn
+
+    # Pre-process datasets (lazy), encode=static method
     ds = dataset.map(lambda x: encode(x, tok_src, tok_trg), batched=True)
 
     # Dataset formats
@@ -65,38 +98,8 @@ def build_dataloader(dataset, tok_src, tok_trg, batch_size=1, num_workers=0):
 
     # Dataset to Pytorch DataLoader
     ds_loader = torch.utils.data.DataLoader(ds, batch_size=batch_size, num_workers=num_workers,
-                                            collate_fn=lambda x: collate_fn(x, tok_src, tok_trg),
-                                            shuffle=True, pin_memory=True)
+                                            collate_fn=lambda x: collate_fn(x, tok_src, tok_trg, max_tokens),
+                                            shuffle=shuffle, pin_memory=True)
     return ds_loader
 
 
-def encode(examples, tok_src, tok_trg):
-    # Encode strings
-    _src_tokenized = tok_src.tokenizer.encode_batch(examples['src'])
-    _trg_tokenized = tok_trg.tokenizer.encode_batch(examples['trg'])
-
-    # Remove other params (there are problems with PyArrow)
-    src_tokenized = [{'ids': x.ids, 'attention_mask': x.attention_mask} for x in _src_tokenized]
-    trg_tokenized = []
-    for x in _trg_tokenized:
-        mask = x.attention_mask
-        mask[-1] = 0  # "Remove" <eos> for translation
-        # lengths = len(x.attention_mask)  # needed due to padded inputs and masks
-        trg_tokenized.append({'ids': x.ids, 'attention_mask': mask})  # , 'lengths': lengths
-    new_examples = {'src': src_tokenized, 'trg': trg_tokenized}
-    return new_examples
-
-
-def collate_fn(examples, tok_src, tok_trg):
-    # Decompose examples
-    _src = [x['src'] for x in examples]
-    _trg = [x['trg'] for x in examples]
-
-    # Processed examples
-    src = tok_src.pad(_src, keys=['ids', 'attention_mask'])
-    trg = tok_trg.pad(_trg, keys=['ids', 'attention_mask'])
-
-    # Convert list to PyTorch tensor
-    new_examples = [torch.stack(src['ids']), torch.stack(src['attention_mask']),
-                    torch.stack(trg['ids']), torch.stack(trg['attention_mask'])]
-    return new_examples

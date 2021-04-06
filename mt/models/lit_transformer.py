@@ -6,6 +6,7 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 import pytorch_lightning as pl
+import sacrebleu
 
 from mt.models.transformer import Transformer
 
@@ -17,23 +18,45 @@ def init_weights(m):
 
 class LitTransformer(pl.LightningModule):
 
-    def __init__(self, src_vocab_size, trg_vocab_size, pad_idx):
+    def __init__(self, lt_src, lt_trg):
         super().__init__()
 
+        # Save tokenizers
+        self.src_tok = lt_src
+        self.trg_tok = lt_trg
+
         # Model params
-        self.transformer = Transformer(src_vocab_size, trg_vocab_size)
+        self.transformer = Transformer(self.src_tok.get_vocab_size(), self.trg_tok.get_vocab_size())
 
         # Initialize weights
         self.transformer.apply(init_weights)
 
         # Set loss (ignore when the target token is <pad>)
+        pad_idx = self.trg_tok.word2idx[lt_trg.PAD_WORD]
         self.criterion = nn.CrossEntropyLoss(ignore_index=pad_idx)
 
     def forward(self, x):
         # Inference
         return x
 
-    def batch_step(self, batch, batch_idx):
+    def training_step(self, batch, batch_idx):
+        # Run one mini-batch
+        _, losses, metrics = self._batch_step(batch, batch_idx)
+
+        # Logging to TensorBoard by default
+        self.log('train_loss', losses['loss'])
+        self.log('train_ppl', metrics['ppl'])
+        return losses['loss']
+
+    def validation_step(self, batch, batch_idx):
+        loss = self._shared_eval(batch, batch_idx, 'val')
+        return loss
+
+    def test_step(self, batch, batch_idx):
+        loss = self._shared_eval(batch, batch_idx, 'test')
+        return loss
+
+    def _batch_step(self, batch, batch_idx):
         src, src_mask, trg, trg_mask = batch
         # trg_lengths = trg_mask.sum(dim=1) + 1  # Not needed
 
@@ -50,31 +73,26 @@ class LitTransformer(pl.LightningModule):
         # Let's presume that after the <eos> everything has be predicted as <pad>,
         # and then, we will ignore the pads in the CrossEntropy
         output_dim = output.shape[-1]
-        output = output.contiguous().view(-1, output_dim)  # (B, L, vocab) => (B*L, vocab)
-        trg = trg[:, 1:].contiguous().view(-1)  # Remove <sos> and reshape to vector (B*L)
+        _output = output.contiguous().view(-1, output_dim)  # (B, L, vocab) => (B*L, vocab)
+        _trg = trg[:, 1:].contiguous().view(-1)  # Remove <sos> and reshape to vector (B*L)
         ##############################
 
         # Compute loss and metrics
-        losses = {'loss': self.criterion(output, trg)}
+        losses = {'loss': self.criterion(_output, _trg)}
         metrics = {'ppl': math.exp(losses['loss'])}
-        return losses, metrics
+        return output, losses, metrics
 
-    def training_step(self, batch, batch_idx):
+    def _shared_eval(self, batch, batch_idx, prefix):
         # Run one mini-batch
-        losses, metrics = self.batch_step(batch, batch_idx)
+        output, losses, metrics = self._batch_step(batch, batch_idx)
+        # src, src_mask, trg, trg_mask = batch
+
+        # output_trg = torch.argmax(output, 2)
+        # output_words = self.trg_tok.decode(output_trg)
 
         # Logging to TensorBoard by default
-        self.log('train_loss', losses['loss'])
-        self.log('train_ppl', metrics['ppl'])
-        return losses['loss']
-
-    def validation_step(self, batch, batch_idx):
-        # Run one mini-batch
-        losses, metrics = self.batch_step(batch, batch_idx)
-
-        # Logging to TensorBoard by default
-        self.log('val_loss', losses['loss'])
-        self.log('val_ppl', metrics['ppl'])
+        self.log(f'{prefix}_loss', losses['loss'])
+        self.log(f'{prefix}_ppl', metrics['ppl'])
         return losses['loss']
 
     def configure_optimizers(self, lr=1e-4):
