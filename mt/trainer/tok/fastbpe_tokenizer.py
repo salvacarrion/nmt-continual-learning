@@ -63,6 +63,8 @@ class FastBPETokenizer:
         self.SOS_WORD = '[SOS]'
         self.EOS_WORD = '[EOS]'
         self.special_tokens = [self.UNK_WORD, self.PAD_WORD, self.MASK_WORD, self.SOS_WORD, self.EOS_WORD]
+        self._special_tokens_set = set(self.special_tokens)
+        self._special_tokens_ids_set = set(range(len(self.special_tokens)))
 
         # Define tokenizer
         self.tokenizer = None
@@ -115,10 +117,25 @@ class FastBPETokenizer:
             x =[x]
         return [x_i.replace("@@ ", "").strip() for x_i in x]
 
-    def decode(self, x):
+    def decode(self, x, return_str=False, decode_bpe=False, remove_special_tokens=True):
         if isinstance(x, torch.Tensor):
             x = x.detach().cpu().numpy()
-        return [[self.idx2word[idx] for idx in x_i] for x_i in x]
+
+        # Convert ids to words
+        if remove_special_tokens:
+            sentences = [[self.idx2word[idx] for idx in x_i if idx not in self._special_tokens_ids_set] for x_i in x]
+        else:
+            sentences = [[self.idx2word[idx] for idx in x_i] for x_i in x]
+
+        # Return sentences as strings
+        if return_str:
+            sentences = [" ".join(sent) for sent in sentences]
+
+        # Decode bpe
+        if decode_bpe:
+            sentences = self.decode_bpe(sentences)
+
+        return sentences
 
     def encode_sample(self, x, mask_eos=False):
         tokens = [self.SOS_WORD] + [w if w in self.word2idx else self.UNK_WORD for w in x.split(' ')] + [self.EOS_WORD]

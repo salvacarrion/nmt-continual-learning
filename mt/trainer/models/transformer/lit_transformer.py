@@ -48,9 +48,22 @@ class LitTransformer(pl.LightningModule):
         loss = self._shared_eval(batch, batch_idx, 'val')
         return loss
 
-    def test_step(self, batch, batch_idx):
-        loss = self._shared_eval(batch, batch_idx, 'test')
-        return loss
+    def test_step(self, batch, batch_idx, max_length=50, beam_width=1):
+        src, src_mask, trg, trg_mask = batch
+
+        # Get indexes
+        sos_idx = self.trg_tok.word2idx[self.trg_tok.SOS_WORD]
+        eos_idx = self.trg_tok.word2idx[self.trg_tok.EOS_WORD]
+
+        # Get output
+        final_candidates = self.transformer.translate_batch(src, src_mask, sos_idx, eos_idx, max_length, beam_width)
+        outputs_ids = [top_trans[0][0] for top_trans in final_candidates]
+
+        # Convert ids2words
+        y_pred = self.trg_tok.decode(outputs_ids, return_str=True, decode_bpe=False, remove_special_tokens=False)
+        y_true = self.trg_tok.decode(trg, return_str=True, decode_bpe=False, remove_special_tokens=False)
+
+        return 0
 
     def _batch_step(self, batch, batch_idx):
         src, src_mask, trg, trg_mask = batch

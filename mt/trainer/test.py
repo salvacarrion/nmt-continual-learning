@@ -28,11 +28,9 @@ def evaluate_model(datapath, src, trg, domain, batch_size=32//4, max_tokens=4000
     # Prepare data loaders
     test_loader = helpers.build_dataloader(datasets["test"], lt_src, lt_trg, batch_size=batch_size, max_tokens=max_tokens, num_workers=num_workers, shuffle=False)
 
-    # Instantiate model
-    model = LitTransformer.load_from_checkpoint(checkpoint_path, lt_src=lt_src, lt_trg=lt_trg)
-
-    # Instantiate model
-    # model = LitTransformer(lt_src, lt_trg)
+    # Instantiate model from checkpoint
+    # model = LitTransformer.load_from_checkpoint(checkpoint_path, lt_src=lt_src, lt_trg=lt_trg)
+    model = LitTransformer(lt_src, lt_trg)
 
     # Callbacks
     callbacks = [

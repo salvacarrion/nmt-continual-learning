@@ -25,7 +25,7 @@ def train_model(datapath, src, trg, domain, batch_size=32//4, max_tokens=4000//4
     datasets = helpers.load_dataset(os.path.join(datapath, "bpe"), src, trg, splits=["train", "val", "test"])
 
     # Prepare data loaders
-    train_loader = helpers.build_dataloader(datasets["train"], lt_src, lt_trg, batch_size=batch_size, max_tokens=max_tokens, num_workers=num_workers)
+    train_loader = helpers.build_dataloader(datasets["val"], lt_src, lt_trg, batch_size=batch_size, max_tokens=max_tokens, num_workers=num_workers)
     val_loader = helpers.build_dataloader(datasets["val"], lt_src, lt_trg, batch_size=batch_size, max_tokens=max_tokens, num_workers=num_workers, shuffle=False)
     test_loader = helpers.build_dataloader(datasets["test"], lt_src, lt_trg, batch_size=batch_size, max_tokens=max_tokens, num_workers=num_workers, shuffle=False)
 
@@ -36,7 +36,7 @@ def train_model(datapath, src, trg, domain, batch_size=32//4, max_tokens=4000//4
     callbacks = [
         ModelCheckpoint(
             monitor='val_loss',
-            filename='transformer-{epoch:02d}-{val_loss:.2f}',
+            filename=domain+'-{epoch:02d}-{val_loss:.2f}',
             save_top_k=3,
             mode='min',
         ),
