@@ -84,12 +84,12 @@ def load_dataset(datapath, src, trg, splits=None):
     return datasets
 
 
-def build_dataloader(dataset, tok_src, tok_trg, batch_size=1, max_tokens=4000, num_workers=0, shuffle=True):
+def build_dataloader(dataset, tok_src, tok_trg, apply_bpe=False, batch_size=1, max_tokens=4000, num_workers=0, shuffle=True):
     from trainer.tok.fastbpe_tokenizer import encode, collate_fn
     from trainer.tok import fastbpe_tokenizer
 
     # Pre-process datasets (lazy), encode=static method
-    fastbpe_tokenizer.apply_bpe = True
+    fastbpe_tokenizer.apply_bpe = apply_bpe
     fastbpe_tokenizer.tok_src = tok_src
     fastbpe_tokenizer.tok_trg = tok_trg
     ds = dataset.map(encode, batched=True)

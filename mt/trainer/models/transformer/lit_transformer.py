@@ -3,6 +3,7 @@ import math
 import torch
 from torch import nn
 import pytorch_lightning as pl
+import sacrebleu
 
 from mt.trainer.models.transformer.transformer import Transformer
 
@@ -60,9 +61,18 @@ class LitTransformer(pl.LightningModule):
         outputs_ids = [top_trans[0][0] for top_trans in final_candidates]
 
         # Convert ids2words
-        y_pred = self.trg_tok.decode(outputs_ids, return_str=True, decode_bpe=False, remove_special_tokens=False)
-        y_true = self.trg_tok.decode(trg, return_str=True, decode_bpe=False, remove_special_tokens=False)
+        y_pred = self.trg_tok.decode(outputs_ids, return_str=True, decode_bpe=True, remove_special_tokens=True)
+        y_true = self.trg_tok.decode(trg, return_str=True, decode_bpe=True, remove_special_tokens=True)
 
+        # Compute bleu
+        bleu_scores = []
+        for sys, ref in zip(y_pred, y_true):
+            bleu = sacrebleu.corpus_bleu([sys], [[ref]])
+            bleu_scores.append(bleu)
+        avg_bleu = sum(bleu_scores)/len(bleu_scores)
+
+        # Logging to TensorBoard by default
+        self.log(f'test_blue', avg_bleu)
         return 0
 
     def _batch_step(self, batch, batch_idx):

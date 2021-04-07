@@ -26,7 +26,9 @@ def evaluate_model(datapath, src, trg, domain, batch_size=32//4, max_tokens=4000
     datasets = helpers.load_dataset(os.path.join(datapath, "bpe"), src, trg, splits=["test"])
 
     # Prepare data loaders
-    test_loader = helpers.build_dataloader(datasets["test"], lt_src, lt_trg, batch_size=batch_size, max_tokens=max_tokens, num_workers=num_workers, shuffle=False)
+    test_loader = helpers.build_dataloader(datasets["test"], lt_src, lt_trg, apply_bpe=False,
+                                           batch_size=batch_size, max_tokens=max_tokens, num_workers=num_workers,
+                                           shuffle=False)
 
     # Instantiate model from checkpoint
     # model = LitTransformer.load_from_checkpoint(checkpoint_path, lt_src=lt_src, lt_trg=lt_trg)
