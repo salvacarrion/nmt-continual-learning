@@ -5,7 +5,6 @@ import numpy as np
 
 import fastBPE
 
-
 # def encode(examples, tok_src, tok_trg, apply_bpe=False):
 apply_bpe = None
 tok_src = None
@@ -117,7 +116,7 @@ class FastBPETokenizer:
             x =[x]
         return [x_i.replace("@@ ", "").strip() for x_i in x]
 
-    def decode(self, x, return_str=False, decode_bpe=False, remove_special_tokens=True):
+    def decode(self, x, return_str=True, decode_bpe=True, remove_special_tokens=True):
         if isinstance(x, torch.Tensor):
             x = x.detach().cpu().numpy()
 

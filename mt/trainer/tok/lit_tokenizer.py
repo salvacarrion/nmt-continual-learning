@@ -156,5 +156,6 @@ class LitTokenizer:
 
     def decode(self, x):
         if isinstance(x, torch.Tensor):
+            assert len(x.shape) == 2
             x = x.detach().cpu().numpy()
         return [self.tokenizer.decode(x_i) for x_i in x]

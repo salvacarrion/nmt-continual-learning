@@ -105,3 +105,10 @@ def build_dataloader(dataset, tok_src, tok_trg, apply_bpe=False, batch_size=1, m
     return ds_loader
 
 
+def print_translations(hypothesis, references):
+    print("")
+    print("Translations: ")
+    for hyp, ref in zip(hypothesis, references):
+        print("- Hyp: " + hyp)
+        print("- Ref: " + ref)
+        print("-------------------------")

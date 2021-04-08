@@ -5,6 +5,7 @@ from torch import nn
 import pytorch_lightning as pl
 import sacrebleu
 
+from mt.helpers import print_translations
 from mt.trainer.models.transformer.transformer import Transformer
 
 
@@ -38,7 +39,8 @@ class LitTransformer(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         # Run one mini-batch
-        _, losses, metrics = self._batch_step(batch, batch_idx)
+        src, src_mask, trg, trg_mask = batch
+        output, losses, metrics, _ = self._batch_step(src, src_mask, trg, trg_mask)
 
         # Logging to TensorBoard by default
         self.log('train_loss', losses['loss'])
@@ -46,8 +48,19 @@ class LitTransformer(pl.LightningModule):
         return losses['loss']
 
     def validation_step(self, batch, batch_idx):
-        loss = self._shared_eval(batch, batch_idx, 'val')
-        return loss
+        # Run one mini-batch
+        src, src_mask, trg, trg_mask = batch
+        output, losses, metrics, (_output, _trg) = self._batch_step(src, src_mask, trg, trg_mask)
+
+        # For debugging
+        hyp_dec = self.trg_tok.decode(torch.argmax(_output, dim=1).unsqueeze(0))
+        ref_dec = self.trg_tok.decode(_trg.unsqueeze(0))
+        print_translations(hyp_dec, ref_dec)
+
+        # Logging to TensorBoard by default
+        self.log('val_loss', losses['loss'])
+        self.log('val_ppl', metrics['ppl'])
+        return losses['loss']
 
     def test_step(self, batch, batch_idx, max_length=50, beam_width=1):
         src, src_mask, trg, trg_mask = batch
@@ -61,23 +74,30 @@ class LitTransformer(pl.LightningModule):
         outputs_ids = [top_trans[0][0] for top_trans in final_candidates]
 
         # Convert ids2words
-        y_pred = self.trg_tok.decode(outputs_ids, return_str=True, decode_bpe=True, remove_special_tokens=True)
-        y_true = self.trg_tok.decode(trg, return_str=True, decode_bpe=True, remove_special_tokens=True)
+        y_pred = self.trg_tok.decode(outputs_ids)
+        y_true = self.trg_tok.decode(trg)
 
-        # Compute bleu
-        bleu_scores = []
-        for sys, ref in zip(y_pred, y_true):
-            bleu = sacrebleu.corpus_bleu([sys], [[ref]])
-            bleu_scores.append(bleu)
-        avg_bleu = sum(bleu_scores)/len(bleu_scores)
+        # Print translations
+        print_translations(y_pred, y_true)
+
+        # # Compute bleu
+        # bleu_scores = []
+        # for sys, ref in zip(y_pred, y_true):
+        #     bleu = sacrebleu.corpus_bleu([sys], [[ref]])
+        #     bleu_scores.append(bleu)
+        # avg_bleu = sum(bleu_scores)/len(bleu_scores)
 
         # Logging to TensorBoard by default
-        self.log(f'test_blue', avg_bleu)
+        self.log(f'test_blue', 0)
         return 0
 
-    def _batch_step(self, batch, batch_idx):
-        src, src_mask, trg, trg_mask = batch
+    def _batch_step(self, src, src_mask, trg, trg_mask):
         # trg_lengths = trg_mask.sum(dim=1) + 1  # Not needed
+
+        # For debugging
+        # src_dec = self.src_tok.decode(src)
+        # trg_dec = self.trg_tok.decode(trg)
+        # print_translations(src_dec, trg_dec)
 
         # Feed input
         # src => whole sentence (including <sos>, <eos>)
@@ -99,21 +119,21 @@ class LitTransformer(pl.LightningModule):
         # Compute loss and metrics
         losses = {'loss': self.criterion(_output, _trg)}
         metrics = {'ppl': math.exp(losses['loss'])}
-        return output, losses, metrics
+        return output, losses, metrics, (_output, _trg)
 
-    def _shared_eval(self, batch, batch_idx, prefix):
-        # Run one mini-batch
-        output, losses, metrics = self._batch_step(batch, batch_idx)
-        # src, src_mask, trg, trg_mask = batch
+    # def _shared_eval(self, batch, batch_idx, prefix):
+    #     # Run one mini-batch
+    #     output, losses, metrics = self._batch_step(batch, batch_idx)
+    #     # src, src_mask, trg, trg_mask = batch
+    #
+    #     # output_trg = torch.argmax(output, 2)
+    #     # output_words = self.trg_tok.decode(output_trg)
+    #
+    #     # Logging to TensorBoard by default
+    #     self.log(f'{prefix}_loss', losses['loss'])
+    #     self.log(f'{prefix}_ppl', metrics['ppl'])
+    #     return output, losses, metrics
 
-        # output_trg = torch.argmax(output, 2)
-        # output_words = self.trg_tok.decode(output_trg)
-
-        # Logging to TensorBoard by default
-        self.log(f'{prefix}_loss', losses['loss'])
-        self.log(f'{prefix}_ppl', metrics['ppl'])
-        return losses['loss']
-
-    def configure_optimizers(self, lr=1e-4):
+    def configure_optimizers(self, lr=10e-3):
         optimizer = torch.optim.Adam(self.parameters(), lr=lr)
         return optimizer

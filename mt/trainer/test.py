@@ -14,7 +14,7 @@ np.random.seed(123)
 pl.seed_everything(123)
 
 logger = TensorBoardLogger('../logs', name='transformer')
-checkpoint_path = "/home/salvacarrion/Documents/Programming/Python/nmt-continual-learning/mt/logs/nmt-cl/version_3/checkpoints/transformer-epoch=00-val_loss=8.60.ckpt"
+checkpoint_path = "/home/salvacarrion/Documents/Programming/Python/nmt-continual-learning/mt/logs/transformer/version_1/checkpoints/tmp|health-epoch=09-train_loss=5.64.ckpt"
 
 
 # Use zero workers when debugging to avoid freezing
