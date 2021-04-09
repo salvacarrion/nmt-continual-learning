@@ -136,6 +136,9 @@ class FastBPETokenizer:
 
         return sentences
 
+    def decode_with_mask(self, x, mask):
+        return [[(ii, jj) for ii, jj in zip(i, j)] for i, j in zip(self.decode(x, return_str=False, decode_bpe=False, remove_special_tokens=False), mask.cpu().numpy())]
+
     def encode_sample(self, x, mask_eos=False):
         tokens = [self.SOS_WORD] + [w if w in self.word2idx else self.UNK_WORD for w in x.split(' ')] + [self.EOS_WORD]
         ids = [self.word2idx[w] for w in tokens]

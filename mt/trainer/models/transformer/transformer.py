@@ -7,6 +7,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 import matplotlib.pyplot as plt
+from mt import helpers
 
 
 class PositionalEncoding(nn.Module):
@@ -232,8 +233,10 @@ class Transformer(nn.Module):
                  enc_heads=8, dec_heads=8,
                  enc_dff_dim=2048, dec_dff_dim=2048,
                  enc_dropout=0.1, dec_dropout=0.1,
-                 max_src_len=5000, max_trg_len=5000):
+                 max_src_len=5000, max_trg_len=5000, src_tok=None, trg_tok=None):
         super().__init__()
+        self.src_tok = src_tok
+        self.trg_tok = trg_tok
 
         # Factor
         # factor = 1
@@ -271,6 +274,11 @@ class Transformer(nn.Module):
         # Process masks
         src_mask = self.make_src_mask(src_mask)
         trg_mask = self.make_trg_mask(trg_mask)
+
+        # For debugging
+        # source = self.src_tok.decode(src)
+        # reference = self.trg_tok.decode(trg)
+        # helpers.print_translations(source, reference)
 
         # Encoder-Decoder
         enc_src = self.encoder(src, src_mask)

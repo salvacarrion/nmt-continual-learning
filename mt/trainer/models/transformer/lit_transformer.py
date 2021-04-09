@@ -24,10 +24,10 @@ class LitTransformer(pl.LightningModule):
         self.trg_tok = lt_trg
 
         # Model params
-        self.transformer = Transformer(self.src_tok.get_vocab_size(), self.trg_tok.get_vocab_size())
+        self.transformer = Transformer(self.src_tok.get_vocab_size(), self.trg_tok.get_vocab_size(), src_tok=self.src_tok, trg_tok=self.trg_tok)
 
         # Initialize weights
-        self.apply(init_weights)
+        self.transformer.apply(init_weights)
 
         # Set loss (ignore when the target token is <pad>)
         pad_idx = self.trg_tok.word2idx[lt_trg.PAD_WORD]
@@ -40,7 +40,12 @@ class LitTransformer(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         # Run one mini-batch
         src, src_mask, trg, trg_mask = batch
-        output, losses, metrics, _ = self._batch_step(src, src_mask, trg, trg_mask)
+        output, losses, metrics, (_output, _trg) = self._batch_step(src, src_mask, trg, trg_mask)
+
+        # For debugging
+        hyp_dec = self.trg_tok.decode(torch.argmax(_output, dim=1).unsqueeze(0))
+        ref_dec = self.trg_tok.decode(_trg.unsqueeze(0))
+        print_translations(hyp_dec, ref_dec)
 
         # Logging to TensorBoard by default
         self.log('train_loss', losses['loss'])
@@ -95,9 +100,9 @@ class LitTransformer(pl.LightningModule):
         # trg_lengths = trg_mask.sum(dim=1) + 1  # Not needed
 
         # For debugging
-        # src_dec = self.src_tok.decode(src)
-        # trg_dec = self.trg_tok.decode(trg)
-        # print_translations(src_dec, trg_dec)
+        # source = self.src_tok.decode(src)
+        # reference = self.trg_tok.decode(trg)
+        # print_translations(source, reference)
 
         # Feed input
         # src => whole sentence (including <sos>, <eos>)
@@ -134,6 +139,6 @@ class LitTransformer(pl.LightningModule):
     #     self.log(f'{prefix}_ppl', metrics['ppl'])
     #     return output, losses, metrics
 
-    def configure_optimizers(self, lr=10e-3):
+    def configure_optimizers(self, lr=1e-4):
         optimizer = torch.optim.Adam(self.parameters(), lr=lr)
         return optimizer
