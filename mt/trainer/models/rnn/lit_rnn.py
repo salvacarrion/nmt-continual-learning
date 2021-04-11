@@ -25,7 +25,7 @@ class LitRNN(pl.LightningModule):
         self.src_tok = lt_src
         self.trg_tok = lt_trg
         self.batch_size = 32
-        self.learning_rate = 1e-3
+        self.learning_rate = 1e-2
 
         # Model params
         self.model = Seq2Seq(self.src_tok.get_vocab_size(), self.trg_tok.get_vocab_size(), src_tok=self.src_tok, trg_tok=self.trg_tok)
@@ -35,6 +35,8 @@ class LitRNN(pl.LightningModule):
 
         # Set loss (ignore when the target token is <pad>)
         self.pad_idx = self.trg_tok.word2idx[lt_trg.PAD_WORD]
+        self.softmax = nn.Softmax(dim=2)
+
         self.criterion = nn.CrossEntropyLoss(ignore_index=self.pad_idx)
 
     def forward(self, x):
@@ -44,7 +46,7 @@ class LitRNN(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         # Run one mini-batch
         src, src_mask, trg, trg_mask = batch
-        # output, losses, metrics, (_output, _trg) = self._batch_step(src, src_mask, trg, trg_mask)
+        batch_size = src.shape[0]
 
         # Get output
         output = self.model(src, src_mask, trg, trg_mask)
@@ -53,21 +55,21 @@ class LitRNN(pl.LightningModule):
         _output, _trg = output[1:], trg[:, 1:]
 
         # Reshape output / target
-        output_dim = _output.shape[-1]
-        _output = _output.permute(1, 0, 2).contiguous().view(-1, output_dim)  # (L, B, vocab) => (L*B, vocab)
-        _trg = _trg.reshape(-1)  # (L, B) => (L*B) // We can use class numbers, no need for one-hot encoding
+        _output = _output.contiguous().view(-1, output.shape[-1])  # (L, B, vocab) => (L*B, vocab)
+        _trg = _trg.permute(1, 0).reshape(-1)  # (L, B) => (L*B) // We can use class numbers, no need for one-hot encoding
         ##############################
 
         # Compute loss
-        # loss = F.cross_entropy(_output, _trg, ignore_index=self.pad_idx)
         loss = self.criterion(_output, _trg.type(torch.long))
 
         # For debugging
-        _output = _output.detach()
-        _trg = _trg.detach()
-        hyp_dec = self.trg_tok.decode(torch.argmax(_output, dim=1).unsqueeze(0))
-        ref_dec = self.trg_tok.decode(_trg.detach().unsqueeze(0))
-        print_translations(hyp_dec, ref_dec)
+        _src = src.detach()
+        _output = torch.argmax(_output.detach(), dim=1).reshape(-1, batch_size).permute(1, 0)
+        _trg = _trg.detach().reshape(-1, batch_size).permute(1, 0)
+        src_dec = self.src_tok.decode(_src)
+        hyp_dec = self.trg_tok.decode(_output)
+        ref_dec = self.trg_tok.decode(_trg)
+        print_translations(hypothesis=hyp_dec, references=ref_dec, source=src_dec, limit=1)
 
         # Logging to TensorBoard by default
         self.log('train_loss', loss)

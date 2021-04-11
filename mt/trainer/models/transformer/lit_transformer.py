@@ -62,11 +62,10 @@ class LitTransformer(pl.LightningModule):
         loss = self.criterion(_output, _trg)
 
         # For debugging
-        _output = _output.detach()
-        _trg = _trg.detach()
-        hyp_dec = self.trg_tok.decode(torch.argmax(_output, dim=1).unsqueeze(0))
+        src_dec = self.src_tok.decode(src.detach())
+        hyp_dec = self.trg_tok.decode(torch.argmax(_output.detach(), dim=1).unsqueeze(0))
         ref_dec = self.trg_tok.decode(_trg.detach().unsqueeze(0))
-        print_translations(hyp_dec, ref_dec)
+        print_translations(hypothesis=hyp_dec, references=ref_dec, source=src_dec)
 
         # Logging to TensorBoard by default
         self.log('train_loss', loss)
