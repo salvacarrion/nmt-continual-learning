@@ -16,19 +16,19 @@ echo "- Target language: "$TRG_LANG
 echo "- Base path: "$BASE_PATH
 
 # Create folder
-mkdir -p $BASE_PATH/bpe/
+mkdir -p $BASE_PATH/bpe.$VOCAB_SIZE/
 
 # Apply BPE ****
 # Source
-$FASTBPE_PATH applybpe $BASE_PATH/bpe/train.$SRC_LANG $BASE_PATH/clean/train.$SRC_LANG $BASE_PATH/bpe/codes.$SRC_LANG
-$FASTBPE_PATH applybpe $BASE_PATH/bpe/val.$SRC_LANG $BASE_PATH/clean/val.$SRC_LANG $BASE_PATH/bpe/codes.$SRC_LANG
-$FASTBPE_PATH applybpe $BASE_PATH/bpe/test.$SRC_LANG $BASE_PATH/clean/test.$SRC_LANG $BASE_PATH/bpe/codes.$SRC_LANG
+$FASTBPE_PATH applybpe $BASE_PATH/bpe.$VOCAB_SIZE/train.$SRC_LANG $BASE_PATH/clean/train.$SRC_LANG $BASE_PATH/bpe.$VOCAB_SIZE/codes.$SRC_LANG
+$FASTBPE_PATH applybpe $BASE_PATH/bpe.$VOCAB_SIZE/val.$SRC_LANG $BASE_PATH/clean/val.$SRC_LANG $BASE_PATH/bpe.$VOCAB_SIZE/codes.$SRC_LANG
+$FASTBPE_PATH applybpe $BASE_PATH/bpe.$VOCAB_SIZE/test.$SRC_LANG $BASE_PATH/clean/test.$SRC_LANG $BASE_PATH/bpe.$VOCAB_SIZE/codes.$SRC_LANG
 
 # Target
-$FASTBPE_PATH applybpe $BASE_PATH/bpe/train.$TRG_LANG $BASE_PATH/clean/train.$TRG_LANG $BASE_PATH/bpe/codes.$TRG_LANG
-$FASTBPE_PATH applybpe $BASE_PATH/bpe/val.$TRG_LANG $BASE_PATH/clean/val.$TRG_LANG $BASE_PATH/bpe/codes.$TRG_LANG
-$FASTBPE_PATH applybpe $BASE_PATH/bpe/test.$TRG_LANG $BASE_PATH/clean/test.$TRG_LANG $BASE_PATH/bpe/codes.$TRG_LANG
+$FASTBPE_PATH applybpe $BASE_PATH/bpe.$VOCAB_SIZE/train.$TRG_LANG $BASE_PATH/clean/train.$TRG_LANG $BASE_PATH/bpe.$VOCAB_SIZE/codes.$TRG_LANG
+$FASTBPE_PATH applybpe $BASE_PATH/bpe.$VOCAB_SIZE/val.$TRG_LANG $BASE_PATH/clean/val.$TRG_LANG $BASE_PATH/bpe.$VOCAB_SIZE/codes.$TRG_LANG
+$FASTBPE_PATH applybpe $BASE_PATH/bpe.$VOCAB_SIZE/test.$TRG_LANG $BASE_PATH/clean/test.$TRG_LANG $BASE_PATH/bpe.$VOCAB_SIZE/codes.$TRG_LANG
 
 # Save vocabularies
-$FASTBPE_PATH getvocab $BASE_PATH/bpe/train.$SRC_LANG > $BASE_PATH/bpe/vocab.$VOCAB_SIZE.$SRC_LANG
-$FASTBPE_PATH getvocab $BASE_PATH/bpe/train.$TRG_LANG > $BASE_PATH/bpe/vocab.$VOCAB_SIZE.$TRG_LANG
+$FASTBPE_PATH getvocab $BASE_PATH/bpe.$VOCAB_SIZE/train.$SRC_LANG > $BASE_PATH/bpe.$VOCAB_SIZE/vocab.$SRC_LANG
+$FASTBPE_PATH getvocab $BASE_PATH/bpe.$VOCAB_SIZE/train.$TRG_LANG > $BASE_PATH/bpe.$VOCAB_SIZE/vocab.$TRG_LANG

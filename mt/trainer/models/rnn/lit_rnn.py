@@ -8,7 +8,7 @@ import pytorch_lightning as pl
 import sacrebleu
 
 from mt.helpers import print_translations
-from mt.trainer.models.transformer.transformer import Transformer
+from mt.trainer.models.rnn.rnn import Seq2Seq
 
 
 def init_weights(m):
@@ -16,7 +16,7 @@ def init_weights(m):
         nn.init.xavier_uniform_(m.weight.data)
 
 
-class LitTransformer(pl.LightningModule):
+class LitRNN(pl.LightningModule):
 
     def __init__(self, lt_src, lt_trg):
         super().__init__()
@@ -25,10 +25,10 @@ class LitTransformer(pl.LightningModule):
         self.src_tok = lt_src
         self.trg_tok = lt_trg
         self.batch_size = 32
-        self.learning_rate = 10e-3
+        self.learning_rate = 1e-3
 
         # Model params
-        self.model = Transformer(self.src_tok.get_vocab_size(), self.trg_tok.get_vocab_size(), src_tok=self.src_tok, trg_tok=self.trg_tok)
+        self.model = Seq2Seq(self.src_tok.get_vocab_size(), self.trg_tok.get_vocab_size(), src_tok=self.src_tok, trg_tok=self.trg_tok)
 
         # Initialize weights
         self.model.apply(init_weights)
@@ -47,19 +47,20 @@ class LitTransformer(pl.LightningModule):
         # output, losses, metrics, (_output, _trg) = self._batch_step(src, src_mask, trg, trg_mask)
 
         # Get output
-        output, _ = self.model(src, src_mask, trg[:, :-1], trg_mask[:, :-1])
+        output = self.model(src, src_mask, trg, trg_mask)
+
+        # Ignore <sos> token
+        _output, _trg = output[1:], trg[:, 1:]
 
         # Reshape output / target
-        # Let's presume that after the <eos> everything has be predicted as <pad>,
-        # and then, we will ignore the pads in the CrossEntropy
-        output_dim = output.shape[-1]
-        _output = output.contiguous().view(-1, output_dim)  # (B, L, vocab) => (B*L, vocab)
-        _trg = trg[:, 1:].contiguous().view(-1)  # Remove <sos> and reshape to vector (B*L)
+        output_dim = _output.shape[-1]
+        _output = _output.permute(1, 0, 2).contiguous().view(-1, output_dim)  # (L, B, vocab) => (L*B, vocab)
+        _trg = _trg.reshape(-1)  # (L, B) => (L*B) // We can use class numbers, no need for one-hot encoding
         ##############################
 
         # Compute loss
         # loss = F.cross_entropy(_output, _trg, ignore_index=self.pad_idx)
-        loss = self.criterion(_output, _trg)
+        loss = self.criterion(_output, _trg.type(torch.long))
 
         # For debugging
         _output = _output.detach()

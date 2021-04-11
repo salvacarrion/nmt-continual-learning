@@ -16,9 +16,9 @@ echo "- Target language: "$TRG_LANG
 echo "- Base path: "$BASE_PATH
 
 # Create folder
-mkdir -p $BASE_PATH/bpe/
+mkdir -p $BASE_PATH/bpe.$VOCAB_SIZE/
 
 # Learn codes
-$FASTBPE_PATH learnbpe $VOCAB_SIZE $BASE_PATH/clean/train.$SRC_LANG > $BASE_PATH/bpe/codes.$SRC_LANG
-$FASTBPE_PATH learnbpe $VOCAB_SIZE $BASE_PATH/clean/train.$TRG_LANG > $BASE_PATH/bpe/codes.$TRG_LANG
+$FASTBPE_PATH learnbpe $VOCAB_SIZE $BASE_PATH/clean/train.$SRC_LANG > $BASE_PATH/bpe.$VOCAB_SIZE/codes.$SRC_LANG
+$FASTBPE_PATH learnbpe $VOCAB_SIZE $BASE_PATH/clean/train.$TRG_LANG > $BASE_PATH/bpe.$VOCAB_SIZE/codes.$TRG_LANG
 

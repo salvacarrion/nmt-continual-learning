@@ -1,7 +1,7 @@
 import os
 
 # Constants
-VOCAB_SIZE = 32000
+VOCAB_SIZE = 8000
 
 # Main folders
 ROOT_PATH = "/home/salvacarrion/Documents/Programming/Datasets/Scielo/"
@@ -13,7 +13,7 @@ DATASETS_PATH = os.path.join(BASE_PATH, "datasets")
 DATASET_RAW_NAME = "raw"
 DATASET_SPLITS_NAME = "splits"
 DATASET_CLEAN_NAME = "clean"
-DATASET_BPE_NAME = "bpe"
+DATASET_BPE_NAME = f"bpe.{VOCAB_SIZE}"
 DATASET_TOK_NAME = "tok"
 
 # Others

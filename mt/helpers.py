@@ -18,9 +18,9 @@ def get_tokenizers(datapath, src, trg, use_fastbpe):
 
         # Load vocab
         lt_src.load_vocab(os.path.join(datapath, f"codes.{src}"),
-                          os.path.join(datapath, f"vocab.32000.{src}"))
+                          os.path.join(datapath, f"vocab.{src}"))
         lt_trg.load_vocab(os.path.join(datapath, f"codes.{trg}"),
-                          os.path.join(datapath, f"vocab.32000.{trg}"))
+                          os.path.join(datapath, f"vocab.{trg}"))
     else:
         # Do not use padding here. Datasets are preprocessed before batching
         lt_src = LitTokenizer(padding=False, truncation=False, max_length=5000, lang=src)

@@ -229,11 +229,11 @@ class Transformer(nn.Module):
 
     def __init__(self, src_vocab_size, trg_vocab_size,
                  d_model=512,
-                 enc_layers=2, dec_layers=2,
+                 enc_layers=4, dec_layers=4,
                  enc_heads=8, dec_heads=8,
                  enc_dff_dim=2048, dec_dff_dim=2048,
                  enc_dropout=0.1, dec_dropout=0.1,
-                 max_src_len=5000, max_trg_len=5000, src_tok=None, trg_tok=None):
+                 max_src_len=2000, max_trg_len=2000, src_tok=None, trg_tok=None):
         super().__init__()
         self.src_tok = src_tok
         self.trg_tok = trg_tok

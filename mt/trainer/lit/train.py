@@ -9,6 +9,7 @@ from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from mt.preprocess import DATASETS_PATH, utils
 from mt import helpers
 from mt.trainer.models.transformer.lit_transformer import LitTransformer, init_weights
+from mt.trainer.models.rnn.lit_rnn import LitRNN, init_weights
 
 np.random.seed(123)
 pl.seed_everything(123)
@@ -17,12 +18,13 @@ logger = TensorBoardLogger('../../logs', name='transformer')
 
 
 # Use zero workers when debugging to avoid freezing
-def train_model(datapath, src, trg, domain, batch_size=32//1, max_tokens=4000//1, num_workers=0):
+def train_model(datapath, src, trg, domain, batch_size=32//2, max_tokens=4000//2, num_workers=0):
     # Load tokenizers
-    lt_src, lt_trg = helpers.get_tokenizers(os.path.join(datapath, "bpe"), src, trg, use_fastbpe=True)  # use_fastbpe != apply_fastbpe
+    bpe_folder = "bpe.8000"
+    lt_src, lt_trg = helpers.get_tokenizers(os.path.join(datapath, bpe_folder), src, trg, use_fastbpe=True)  # use_fastbpe != apply_fastbpe
 
     # Load dataset
-    datasets = helpers.load_dataset(os.path.join(datapath, "bpe"), src, trg, splits=["train", "val", "test"])
+    datasets = helpers.load_dataset(os.path.join(datapath, bpe_folder), src, trg, splits=["train", "val", "test"])
 
     # Prepare data loaders
     train_loader = helpers.build_dataloader(datasets["test"], lt_src, lt_trg, batch_size=batch_size, max_tokens=max_tokens, num_workers=num_workers)
@@ -30,7 +32,7 @@ def train_model(datapath, src, trg, domain, batch_size=32//1, max_tokens=4000//1
     # test_loader = helpers.build_dataloader(datasets["test"], lt_src, lt_trg, batch_size=batch_size, max_tokens=max_tokens, num_workers=num_workers, shuffle=False)
 
     # Instantiate model
-    model = LitTransformer(lt_src, lt_trg)
+    model = LitRNN(lt_src, lt_trg)
 
     # Callbacks
     callbacks = [
@@ -49,7 +51,7 @@ def train_model(datapath, src, trg, domain, batch_size=32//1, max_tokens=4000//1
         accumulate_grad_batches=1,
         check_val_every_n_epoch=1,
         gradient_clip_val=1.0,
-        overfit_batches=1,  # For debugging
+        # overfit_batches=1,  # For debugging
         callbacks=callbacks, logger=logger,
         deterministic=True)
 

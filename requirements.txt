@@ -1,4 +1,4 @@
-torch==1.8.0
+torch==1.8.1
 
 # Fairseq
 #fairseq==0.10.2  #c3d2beec96bd609f87d8da14cc2dffdbbd843b54
