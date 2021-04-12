@@ -8,7 +8,7 @@ from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 
 from mt.preprocess import DATASETS_PATH, LOGS_PATH, utils
 from mt import helpers
-from mt.trainer.models.transformer_old.lit_transformer import LitTransformer, init_weights
+from mt.trainer.models.transformer.lit_transformer import LitTransformer, init_weights
 from mt.trainer.models.rnn.lit_rnn import LitRNN, init_weights
 
 
@@ -64,10 +64,10 @@ def train_model(datapath, src, trg, model_name, bpe_folder, domain=None, batch_s
     trainer = pl.Trainer(
         # min_epochs=1, max_epochs=50,
         gpus=1,
-        accumulate_grad_batches=8,
+        accumulate_grad_batches=1,
         check_val_every_n_epoch=1,
         gradient_clip_val=1.0,
-        overfit_batches=1,  # For debugging
+        # overfit_batches=1,  # For debugging
         callbacks=callbacks, logger=logger,
         deterministic=True)
 
