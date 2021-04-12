@@ -69,5 +69,5 @@ if __name__ == "__main__":
         print(f"Testing model ({fname_base})...")
 
         # Evaluate model
-        evaluate_model(dataset, src, trg, model_name="rnn", bpe_folder="bpe.8000", batch_size=32, max_tokens=4000, domain=domain)
+        evaluate_model(dataset, src, trg, model_name="transformer", bpe_folder="bpe.8000", batch_size=32, max_tokens=4000, domain=domain)
 

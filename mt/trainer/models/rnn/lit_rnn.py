@@ -107,7 +107,8 @@ class LitRNN(pl.LightningModule):
         y_true = self.trg_tok.decode(trg)
 
         # Print translations
-        print_translations(y_pred, y_true)
+        if self.show_translations:
+            print_translations(y_pred, y_true)
 
         # # Compute bleu
         # bleu_scores = []
