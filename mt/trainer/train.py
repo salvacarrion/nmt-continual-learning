@@ -14,14 +14,23 @@ from mt.trainer.models.rnn.lit_rnn import LitRNN, init_weights
 np.random.seed(123)
 pl.seed_everything(123)
 
-MODEL_NAME = "rnn"
-logger = TensorBoardLogger('../../logs', name=MODEL_NAME)
+
+def get_model(model_name, lt_src, lt_trg):
+    print(f"=> Model chosen: '{model_name}'")
+    if model_name == "rnn":
+        model = LitRNN(lt_src, lt_trg)
+    elif model_name == "transformer":
+        model = LitTransformer(lt_src, lt_trg)
+    else:
+        raise ValueError("Unknown model")
+    return model
 
 
 # Use zero workers when debugging to avoid freezing
-def train_model(datapath, src, trg, domain, batch_size=32//2, max_tokens=4000//2, num_workers=0):
+def train_model(datapath, src, trg, model_name, bpe_folder, domain=None, batch_size=32//2, max_tokens=4000//2, num_workers=0):
+    logger = TensorBoardLogger('../../logs', name=model_name)
+
     # Load tokenizers
-    bpe_folder = "bpe.8000"
     lt_src, lt_trg = helpers.get_tokenizers(os.path.join(datapath, bpe_folder), src, trg, use_fastbpe=True)  # use_fastbpe != apply_fastbpe
 
     # Load dataset
@@ -33,13 +42,8 @@ def train_model(datapath, src, trg, domain, batch_size=32//2, max_tokens=4000//2
     # test_loader = helpers.build_dataloader(datasets["test"], lt_src, lt_trg, batch_size=batch_size, max_tokens=max_tokens, num_workers=num_workers, shuffle=False)
 
     # Instantiate model
-    print(f"=> Model chosen: '{MODEL_NAME}'")
-    if MODEL_NAME == "rnn":
-        model = LitRNN(lt_src, lt_trg)
-    elif MODEL_NAME == "transformer":
-        model = LitTransformer(lt_src, lt_trg)
-    else:
-        raise ValueError("Unknown model")
+    model = get_model(model_name, lt_src, lt_trg)
+    model.show_translations = True
 
     # Callbacks
     callbacks = [
@@ -59,7 +63,7 @@ def train_model(datapath, src, trg, domain, batch_size=32//2, max_tokens=4000//2
         accumulate_grad_batches=1,
         check_val_every_n_epoch=1,
         gradient_clip_val=1.0,
-        overfit_batches=1,  # For debugging
+        # overfit_batches=1,  # For debugging
         callbacks=callbacks, logger=logger,
         deterministic=True)
 
@@ -82,4 +86,4 @@ if __name__ == "__main__":
         print(f"Training model ({fname_base})...")
 
         # Train model
-        train_model(dataset, src, trg, domain)
+        train_model(dataset, src, trg, model_name="rnn", bpe_folder="bpe.8000", domain=domain)

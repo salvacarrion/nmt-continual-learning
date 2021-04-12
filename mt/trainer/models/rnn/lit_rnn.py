@@ -24,8 +24,9 @@ class LitRNN(pl.LightningModule):
         # Save tokenizers
         self.src_tok = lt_src
         self.trg_tok = lt_trg
+        self.show_translations = False
         self.batch_size = 32
-        self.learning_rate = 1e-2
+        self.learning_rate = 1e-3
 
         # Model params
         self.model = Seq2Seq(self.src_tok.get_vocab_size(), self.trg_tok.get_vocab_size(), src_tok=self.src_tok, trg_tok=self.trg_tok)
@@ -63,13 +64,14 @@ class LitRNN(pl.LightningModule):
         loss = self.criterion(_output, _trg.type(torch.long))
 
         # For debugging
-        _src = src.detach()
-        _output = torch.argmax(_output.detach(), dim=1).reshape(-1, batch_size).permute(1, 0)
-        _trg = _trg.detach().reshape(-1, batch_size).permute(1, 0)
-        src_dec = self.src_tok.decode(_src)
-        hyp_dec = self.trg_tok.decode(_output)
-        ref_dec = self.trg_tok.decode(_trg)
-        print_translations(hypothesis=hyp_dec, references=ref_dec, source=src_dec, limit=1)
+        if self.show_translations:
+            _src = src.detach()
+            _output = torch.argmax(_output.detach(), dim=1).reshape(-1, batch_size).permute(1, 0)
+            _trg = _trg.detach().reshape(-1, batch_size).permute(1, 0)
+            src_dec = self.src_tok.decode(_src)
+            hyp_dec = self.trg_tok.decode(_output)
+            ref_dec = self.trg_tok.decode(_trg)
+            print_translations(hypothesis=hyp_dec, references=ref_dec, source=src_dec, limit=1)
 
         # Logging to TensorBoard by default
         self.log('train_loss', loss)

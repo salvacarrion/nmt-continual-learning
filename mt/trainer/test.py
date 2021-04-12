@@ -9,11 +9,13 @@ from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from mt.preprocess import DATASETS_PATH, utils
 from mt import helpers
 from mt.trainer.models.transformer.lit_transformer import LitTransformer, init_weights
+from mt.trainer.models.rnn.lit_rnn import LitRNN, init_weights
 
 np.random.seed(123)
 pl.seed_everything(123)
 
-logger = TensorBoardLogger('../../logs', name='transformer')
+MODEL_NAME = "rnn"
+logger = TensorBoardLogger('../../logs', name=MODEL_NAME)
 checkpoint_path = "/home/salvacarrion/Documents/Programming/Python/nmt-continual-learning/mt/logs/transformer/version_1/checkpoints/tmp|health-epoch=09-train_loss=5.64.ckpt"
 
 
@@ -31,8 +33,16 @@ def evaluate_model(datapath, src, trg, domain, batch_size=32//4, max_tokens=4000
                                            shuffle=False)
 
     # Instantiate model from checkpoint
-    # model = LitTransformer.load_from_checkpoint(checkpoint_path, lt_src=lt_src, lt_trg=lt_trg)
-    model = LitTransformer(lt_src, lt_trg)
+    # Instantiate model
+    print(f"=> Model chosen: '{MODEL_NAME}'")
+    if MODEL_NAME == "rnn":
+        # model = LitRNN.load_from_checkpoint(checkpoint_path, lt_src=lt_src, lt_trg=lt_trg)
+        model = LitRNN(lt_src, lt_trg)
+    elif MODEL_NAME == "transformer":
+        # model = LitTransformer.load_from_checkpoint(checkpoint_path, lt_src=lt_src, lt_trg=lt_trg)
+        model = LitTransformer(lt_src, lt_trg)
+    else:
+        raise ValueError("Unknown model")
 
     # Callbacks
     callbacks = [

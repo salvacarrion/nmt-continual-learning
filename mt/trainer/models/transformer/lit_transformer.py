@@ -24,8 +24,9 @@ class LitTransformer(pl.LightningModule):
         # Save tokenizers
         self.src_tok = lt_src
         self.trg_tok = lt_trg
+        self.show_translations = False
         self.batch_size = 32
-        self.learning_rate = 10e-3
+        self.learning_rate = 1e-3
 
         # Model params
         self.model = Transformer(self.src_tok.get_vocab_size(), self.trg_tok.get_vocab_size(), src_tok=self.src_tok, trg_tok=self.trg_tok)
@@ -44,7 +45,7 @@ class LitTransformer(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         # Run one mini-batch
         src, src_mask, trg, trg_mask = batch
-        # output, losses, metrics, (_output, _trg) = self._batch_step(src, src_mask, trg, trg_mask)
+        batch_size = src.shape[0]
 
         # Get output
         output, _ = self.model(src, src_mask, trg[:, :-1], trg_mask[:, :-1])
@@ -52,20 +53,22 @@ class LitTransformer(pl.LightningModule):
         # Reshape output / target
         # Let's presume that after the <eos> everything has be predicted as <pad>,
         # and then, we will ignore the pads in the CrossEntropy
-        output_dim = output.shape[-1]
-        _output = output.contiguous().view(-1, output_dim)  # (B, L, vocab) => (B*L, vocab)
+        _output = output.contiguous().view(-1, output.shape[-1])  # (B, L, vocab) => (B*L, vocab)
         _trg = trg[:, 1:].contiguous().view(-1)  # Remove <sos> and reshape to vector (B*L)
         ##############################
 
         # Compute loss
-        # loss = F.cross_entropy(_output, _trg, ignore_index=self.pad_idx)
-        loss = self.criterion(_output, _trg)
+        loss = self.criterion(_output, _trg.type(torch.long))
 
         # For debugging
-        src_dec = self.src_tok.decode(src.detach())
-        hyp_dec = self.trg_tok.decode(torch.argmax(_output.detach(), dim=1).unsqueeze(0))
-        ref_dec = self.trg_tok.decode(_trg.detach().unsqueeze(0))
-        print_translations(hypothesis=hyp_dec, references=ref_dec, source=src_dec)
+        if self.show_translations:
+            _src = src.detach()
+            _output = torch.argmax(_output.detach(), dim=1).reshape(batch_size, -1)
+            _trg = _trg.detach().reshape(batch_size, -1)
+            src_dec = self.src_tok.decode(_src)
+            hyp_dec = self.trg_tok.decode(_output)
+            ref_dec = self.trg_tok.decode(_trg)
+            print_translations(hypothesis=hyp_dec, references=ref_dec, source=src_dec, limit=1)
 
         # Logging to TensorBoard by default
         self.log('train_loss', loss)

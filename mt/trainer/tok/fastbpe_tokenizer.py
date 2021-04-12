@@ -47,8 +47,8 @@ def collate_fn(examples, tok_src, tok_trg, max_tokens):
         trg['attention_mask'] = [trg['attention_mask'][i] for i in rnd_idxs]
 
     # Convert list to PyTorch tensor
-    new_examples = [torch.stack(src['ids']).type(torch.int), torch.stack(src['attention_mask']).type(torch.bool),
-                    torch.stack(trg['ids']).type(torch.int), torch.stack(trg['attention_mask']).type(torch.bool)]
+    new_examples = [torch.stack(src['ids']).type(torch.long), torch.stack(src['attention_mask']).type(torch.bool),
+                    torch.stack(trg['ids']).type(torch.long), torch.stack(trg['attention_mask']).type(torch.bool)]
     return new_examples
 
 
