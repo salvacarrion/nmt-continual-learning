@@ -1,3 +1,5 @@
+# Python 3.8.8
+
 torch==1.8.1
 pytorch-lightning==1.2.7
 
@@ -9,6 +11,7 @@ pytorch-lightning==1.2.7
 tokenizers==0.10.2
 datasets==1.5.0
 
+sacrebleu==1.5.1
 sacremoses==0.0.44
 tensorboardX==2.2
 

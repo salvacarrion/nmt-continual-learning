@@ -8,7 +8,7 @@ if os.getenv('LOCAL_GPU'):
     ROOT_PATH = "/home/salvacarrion/Documents/Programming/Datasets/Scielo/"
     FASTBPE_PATH = "/home/salvacarrion/Documents/packages/fastBPE/fast"
 elif os.getenv('REMOTE_GPU'):
-    ROOT_PATH = "/home/scarrion/datasets/scielo/constrained/datasets"
+    ROOT_PATH = "/home/scarrion/datasets/scielo/"
     FASTBPE_PATH = "/home/scarrion/packages/fastBPE/fast"
 else:
     raise ValueError("Unknown environment")
