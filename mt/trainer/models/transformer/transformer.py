@@ -307,7 +307,7 @@ class Transformer(nn.Module):
             enc_src = self.encoder(src, src_mask)
 
         # Set fist word (<sos>)
-        batch_size = len(enc_src)
+        batch_size = len(src)
         final_candidates = []
         for i in range(batch_size):  # Samples to translate
             candidates = [([sos_idx], 0.0)]  # (ids, probability (unnormalized))

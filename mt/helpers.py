@@ -111,7 +111,7 @@ def print_translations(hypothesis, references, source=None, limit=None):
     source = source if source else [None]*len(hypothesis)
     for i, (src, hyp, ref) in enumerate(zip(source, hypothesis, references)):
         print(f"Translation #{i+1}: ")
-        if source:
+        if src:
             print("\t- Src: " + src)
         print("\t- Hyp: " + hyp)
         print("\t- Ref: " + ref)

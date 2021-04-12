@@ -38,7 +38,7 @@ def train_model(datapath, src, trg, model_name, bpe_folder, domain=None, batch_s
 
     # Prepare data loaders
     train_loader = helpers.build_dataloader(datasets["train"], lt_src, lt_trg, batch_size=batch_size, max_tokens=max_tokens, num_workers=num_workers)
-    val_loader = helpers.build_dataloader(datasets["val"], lt_src, lt_trg, batch_size=batch_size, max_tokens=max_tokens, num_workers=num_workers, shuffle=False)
+    val_loader = None  #helpers.build_dataloader(datasets["val"], lt_src, lt_trg, batch_size=batch_size, max_tokens=max_tokens, num_workers=num_workers, shuffle=False)
     # test_loader = helpers.build_dataloader(datasets["test"], lt_src, lt_trg, batch_size=batch_size, max_tokens=max_tokens, num_workers=num_workers, shuffle=False)
 
     # Instantiate model
@@ -68,7 +68,7 @@ def train_model(datapath, src, trg, model_name, bpe_folder, domain=None, batch_s
         deterministic=True)
 
     # Perform training
-    trainer.fit(model, train_dataloader=train_loader, val_dataloaders=None)
+    trainer.fit(model, train_dataloader=train_loader, val_dataloaders=val_loader)
 
     # # Perform evaluation
     # trainer.test(model, test_loader)

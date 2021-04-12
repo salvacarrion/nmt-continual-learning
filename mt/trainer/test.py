@@ -6,7 +6,7 @@ from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 
-from mt.preprocess import DATASETS_PATH, utils
+from mt.preprocess import DATASETS_PATH, LOGS_PATH, utils
 from mt import helpers
 from mt.trainer.models.transformer.lit_transformer import LitTransformer, init_weights
 from mt.trainer.models.rnn.lit_rnn import LitRNN, init_weights
@@ -14,46 +14,32 @@ from mt.trainer.models.rnn.lit_rnn import LitRNN, init_weights
 np.random.seed(123)
 pl.seed_everything(123)
 
-MODEL_NAME = "rnn"
-logger = TensorBoardLogger('../../logs', name=MODEL_NAME)
-checkpoint_path = "/home/salvacarrion/Documents/Programming/Python/nmt-continual-learning/mt/logs/transformer/version_1/checkpoints/tmp|health-epoch=09-train_loss=5.64.ckpt"
 
-
-# Use zero workers when debugging to avoid freezing
-def evaluate_model(datapath, src, trg, domain, batch_size=32//4, max_tokens=4000//4, num_workers=0):
-    # Load tokenizers
-    lt_src, lt_trg = helpers.get_tokenizers(os.path.join(datapath, "bpe"), src, trg, use_fastbpe=True)  # use_fastbpe != apply_fastbpe
-
-    # Load dataset
-    datasets = helpers.load_dataset(os.path.join(datapath, "bpe"), src, trg, splits=["test"])
-
-    # Prepare data loaders
-    test_loader = helpers.build_dataloader(datasets["test"], lt_src, lt_trg, apply_bpe=False,
-                                           batch_size=batch_size, max_tokens=max_tokens, num_workers=num_workers,
-                                           shuffle=False)
-
-    # Instantiate model from checkpoint
-    # Instantiate model
-    print(f"=> Model chosen: '{MODEL_NAME}'")
-    if MODEL_NAME == "rnn":
-        # model = LitRNN.load_from_checkpoint(checkpoint_path, lt_src=lt_src, lt_trg=lt_trg)
+def get_model(model_name, lt_src, lt_trg):
+    print(f"=> Model chosen: '{model_name}'")
+    if model_name == "rnn":
         model = LitRNN(lt_src, lt_trg)
-    elif MODEL_NAME == "transformer":
-        # model = LitTransformer.load_from_checkpoint(checkpoint_path, lt_src=lt_src, lt_trg=lt_trg)
+    elif model_name == "transformer":
         model = LitTransformer(lt_src, lt_trg)
     else:
         raise ValueError("Unknown model")
+    return model
 
-    # Callbacks
-    callbacks = [
-        ModelCheckpoint(
-            monitor='val_loss',
-            filename='transformer-{epoch:02d}-{val_loss:.2f}',
-            save_top_k=3,
-            mode='min',
-        ),
-        EarlyStopping(monitor='val_loss')
-    ]
+
+# Use zero workers when debugging to avoid freezing
+def evaluate_model(datapath, src, trg, model_name, bpe_folder, domain=None, batch_size=32, max_tokens=4000, num_workers=0):
+    # Load tokenizers
+    lt_src, lt_trg = helpers.get_tokenizers(os.path.join(datapath, bpe_folder), src, trg, use_fastbpe=True)  # use_fastbpe != apply_fastbpe
+
+    # Load dataset
+    datasets = helpers.load_dataset(os.path.join(datapath, bpe_folder), src, trg, splits=["train", "val", "test"])
+
+    # Prepare data loaders
+    test_loader = helpers.build_dataloader(datasets["test"], lt_src, lt_trg, batch_size=batch_size, max_tokens=max_tokens, num_workers=num_workers, shuffle=False)
+
+    # Instantiate model
+    model = get_model(model_name, lt_src, lt_trg)
+    model.show_translations = True
 
     # Train
     trainer = pl.Trainer(min_epochs=1, max_epochs=10, gpus=1,
@@ -65,7 +51,7 @@ def evaluate_model(datapath, src, trg, domain, batch_size=32//4, max_tokens=4000
 
                          gradient_clip_val=1.0,
                          # stochastic_weight_avg=True,
-                         callbacks=callbacks, logger=logger)
+                         )
 
     # Perform training
     trainer.test(model, test_loader)
@@ -80,8 +66,8 @@ if __name__ == "__main__":
     for dataset in datasets:
         domain, (src, trg) = utils.get_dataset_ids(dataset)
         fname_base = f"{domain}_{src}-{trg}"
-        print(f"Training model ({fname_base})...")
+        print(f"Testing model ({fname_base})...")
 
-        # Train model
-        evaluate_model(dataset, src, trg, domain)
+        # Evaluate model
+        evaluate_model(dataset, src, trg, model_name="rnn", bpe_folder="bpe.8000", batch_size=32, max_tokens=4000, domain=domain)
 
