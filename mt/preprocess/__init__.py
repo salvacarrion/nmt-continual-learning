@@ -4,12 +4,14 @@ import os
 VOCAB_SIZE = 8000
 
 # Main folders
-if os.getenv('REMOTE'):
+if os.getenv('LOCAL_GPU'):
+    ROOT_PATH = "/home/salvacarrion/Documents/Programming/Datasets/Scielo/"
+    FASTBPE_PATH = "/home/salvacarrion/Documents/packages/fastBPE/fast"
+elif os.getenv('REMOTE_GPU'):
     ROOT_PATH = "/home/scarrion/datasets/scielo/constrained/datasets"
     FASTBPE_PATH = "/home/scarrion/packages/fastBPE/fast"
 else:
-    ROOT_PATH = "/home/salvacarrion/Documents/Programming/Datasets/Scielo/"
-    FASTBPE_PATH = "/home/salvacarrion/Documents/packages/fastBPE/fast"
+    raise ValueError("Unknown environment")
 
 BASE_PATH = os.path.join(ROOT_PATH, "constrained")  # Main folder
 RAW_PATH = os.path.join(BASE_PATH, "raw")
