@@ -6,7 +6,7 @@ from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 
-from mt.preprocess import DATASETS_PATH, utils
+from mt.preprocess import DATASETS_PATH, LOGS_PATH, utils
 from mt import helpers
 from mt.trainer.models.transformer.lit_transformer import LitTransformer, init_weights
 from mt.trainer.models.rnn.lit_rnn import LitRNN, init_weights
@@ -28,7 +28,7 @@ def get_model(model_name, lt_src, lt_trg):
 
 # Use zero workers when debugging to avoid freezing
 def train_model(datapath, src, trg, model_name, bpe_folder, domain=None, batch_size=32//2, max_tokens=4000//2, num_workers=0):
-    logger = TensorBoardLogger('../../logs', name=model_name)
+    logger = TensorBoardLogger(LOGS_PATH, name=model_name)
 
     # Load tokenizers
     lt_src, lt_trg = helpers.get_tokenizers(os.path.join(datapath, bpe_folder), src, trg, use_fastbpe=True)  # use_fastbpe != apply_fastbpe

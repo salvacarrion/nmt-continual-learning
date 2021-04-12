@@ -13,6 +13,7 @@ elif os.getenv('REMOTE_GPU'):
 else:
     raise ValueError("Unknown environment")
 
+LOGS_PATH = os.path.join(ROOT_PATH, "logs")  # Main folder
 BASE_PATH = os.path.join(ROOT_PATH, "constrained")  # Main folder
 RAW_PATH = os.path.join(BASE_PATH, "raw")
 DATASETS_PATH = os.path.join(BASE_PATH, "datasets")
