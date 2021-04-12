@@ -27,7 +27,7 @@ def get_model(model_name, lt_src, lt_trg):
 
 
 # Use zero workers when debugging to avoid freezing
-def train_model(datapath, src, trg, model_name, bpe_folder, domain=None, batch_size=32//2, max_tokens=4000//2, num_workers=0):
+def train_model(datapath, src, trg, model_name, bpe_folder, domain=None, batch_size=32, max_tokens=4000, num_workers=0):
     logger = TensorBoardLogger(LOGS_PATH, name=model_name)
 
     # Load tokenizers
@@ -43,7 +43,7 @@ def train_model(datapath, src, trg, model_name, bpe_folder, domain=None, batch_s
 
     # Instantiate model
     model = get_model(model_name, lt_src, lt_trg)
-    model.show_translations = True
+    model.show_translations = False
 
     # Callbacks
     callbacks = [
@@ -86,4 +86,4 @@ if __name__ == "__main__":
         print(f"Training model ({fname_base})...")
 
         # Train model
-        train_model(dataset, src, trg, model_name="rnn", bpe_folder="bpe.8000", domain=domain)
+        train_model(dataset, src, trg, model_name="rnn", bpe_folder="bpe.8000", batch_size=32, max_tokens=4000, domain=domain)
