@@ -11,6 +11,10 @@ from mt import helpers
 from mt.trainer.models.transformer.lit_transformer import LitTransformer, init_weights
 from mt.trainer.models.rnn.lit_rnn import LitRNN, init_weights
 
+
+MODEL_NAME = "transformer"
+BPE_FOLDER = "bpe.8000"
+
 np.random.seed(123)
 pl.seed_everything(123)
 
@@ -27,7 +31,7 @@ def get_model(model_name, lt_src, lt_trg):
 
 
 # Use zero workers when debugging to avoid freezing
-def evaluate_model(datapath, src, trg, model_name, bpe_folder, domain=None, batch_size=32, max_tokens=4000, num_workers=0):
+def evaluate_model(datapath, src, trg, model_name, bpe_folder, domain=None, batch_size=32, max_tokens=4096, num_workers=0):
     # Load tokenizers
     lt_src, lt_trg = helpers.get_tokenizers(os.path.join(datapath, bpe_folder), src, trg, use_fastbpe=True)  # use_fastbpe != apply_fastbpe
 
@@ -69,5 +73,5 @@ if __name__ == "__main__":
         print(f"Testing model ({fname_base})...")
 
         # Evaluate model
-        evaluate_model(dataset, src, trg, model_name="transformer", bpe_folder="bpe.8000", batch_size=32, max_tokens=4000, domain=domain)
+        evaluate_model(dataset, src, trg, model_name=MODEL_NAME, bpe_folder=BPE_FOLDER, domain=domain)
 

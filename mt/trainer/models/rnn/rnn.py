@@ -201,7 +201,8 @@ class Seq2Seq(nn.Module):
     def translate_batch(self, src, src_mask, sos_idx, eos_idx, max_length=150, beam_width=1):
         # Run encoder
         src_len = src_mask.sum(dim=1)
-        enc_outputs, hidden = self.encoder(src, src_len)
+        with torch.no_grad():
+            enc_outputs, hidden = self.encoder(src, src_len)
 
         # Set fist word (<sos>)
         batch_size = len(src)

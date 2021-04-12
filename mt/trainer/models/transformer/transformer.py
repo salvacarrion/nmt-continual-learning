@@ -34,8 +34,8 @@ class Encoder(nn.Module):
         self.max_length = max_length
 
         self.tok_embedding = nn.Embedding(input_dim, d_model)  # Vocab => emb
-        self.pos_embedding = PositionalEncoding(d_model, max_length)  # Pos => emb_pos
-        # self.pos_embedding = nn.Embedding(max_length, d_model)  # Pos => emb_pos
+        # self.pos_embedding = PositionalEncoding(d_model, max_length)  # Pos => emb_pos
+        self.pos_embedding = nn.Embedding(max_length, d_model)  # Pos => emb_pos
 
         self.layers = nn.ModuleList([EncoderLayer(d_model,
                                                   n_heads,
@@ -51,11 +51,10 @@ class Encoder(nn.Module):
         assert src_len <= self.max_length
 
         # # Initial positions: 0,1,2,... for each sample
-        # device = src.device
-        # pos = torch.arange(0, src_len).unsqueeze(0).repeat(batch_size, 1).to(device)  # (B, src_len)
+        pos = torch.arange(0, src_len, device=src.device).unsqueeze(0).repeat(batch_size, 1)  # (B, src_len)
 
         # Mix token embeddings and positional embeddings
-        src = self.dropout((self.tok_embedding(src) * self.scale) + self.pos_embedding(src))  # (B, src_len, d_model)
+        src = self.dropout((self.tok_embedding(src) * self.scale) + self.pos_embedding(pos))  # (B, src_len, d_model)
 
         for layer in self.layers:
             src = layer(src, src_mask)  # (B, src_len, d_model)
@@ -163,8 +162,8 @@ class Decoder(nn.Module):
         self.max_length = max_length
 
         self.tok_embedding = nn.Embedding(output_dim, d_model)
-        self.pos_embedding = PositionalEncoding(d_model, max_length)  # Pos => emb_pos
-        # self.pos_embedding = nn.Embedding(max_length, d_model)  # This limits decoding length at testing
+        # self.pos_embedding = PositionalEncoding(d_model, max_length)  # Pos => emb_pos
+        self.pos_embedding = nn.Embedding(max_length, d_model)  # This limits decoding length at testing
 
         self.layers = nn.ModuleList([DecoderLayer(d_model, n_heads, dff, dropout)
                                      for _ in range(n_layers)])
@@ -181,10 +180,10 @@ class Decoder(nn.Module):
 
         # # Initial positions: 0,1,2,... for each sample
         # device = trg.device
-        # pos = torch.arange(0, trg_len).unsqueeze(0).repeat(batch_size, 1).to(device)
+        pos = torch.arange(0, trg_len, device=trg.device).unsqueeze(0).repeat(batch_size, 1)#.to(device)
 
         # Mix token embeddings and positional embeddings
-        trg = self.dropout((self.tok_embedding(trg) * self.scale) + self.pos_embedding(trg))
+        trg = self.dropout((self.tok_embedding(trg) * self.scale) + self.pos_embedding(pos))
 
         attention = None
         for layer in self.layers:
@@ -229,7 +228,7 @@ class Transformer(nn.Module):
 
     def __init__(self, src_vocab_size, trg_vocab_size,
                  d_model=512,
-                 enc_layers=4, dec_layers=4,
+                 enc_layers=6, dec_layers=6,
                  enc_heads=8, dec_heads=8,
                  enc_dff_dim=2048, dec_dff_dim=2048,
                  enc_dropout=0.1, dec_dropout=0.1,
@@ -237,6 +236,9 @@ class Transformer(nn.Module):
         super().__init__()
         self.src_tok = src_tok
         self.trg_tok = trg_tok
+
+        self.max_src_len = self.src_tok.max_length if self.src_tok else max_src_len
+        self.max_trg_len = self.trg_tok.max_length if self.trg_tok else max_trg_len
 
         # Factor
         # factor = 1
@@ -248,8 +250,8 @@ class Transformer(nn.Module):
         # enc_dff_dim = enc_dff_dim//factor
         # dec_dff_dim = dec_dff_dim//factor
 
-        self.encoder = Encoder(src_vocab_size, d_model, enc_layers, enc_heads, enc_dff_dim, enc_dropout, max_src_len)
-        self.decoder = Decoder(trg_vocab_size, d_model, dec_layers, dec_heads, dec_dff_dim, dec_dropout, max_trg_len)
+        self.encoder = Encoder(src_vocab_size, d_model, enc_layers, enc_heads, enc_dff_dim, enc_dropout, self.max_src_len)
+        self.decoder = Decoder(trg_vocab_size, d_model, dec_layers, dec_heads, dec_dff_dim, dec_dropout, self.max_trg_len)
         self.softmax = nn.Softmax(dim=2)
 
     def make_src_mask(self, src_mask):

@@ -26,10 +26,11 @@ class LitTransformer(pl.LightningModule):
         self.trg_tok = lt_trg
         self.show_translations = False
         self.batch_size = 32
-        self.learning_rate = 1e-3
+        self.learning_rate = 1e-2
 
         # Model params
-        self.model = Transformer(self.src_tok.get_vocab_size(), self.trg_tok.get_vocab_size(), src_tok=self.src_tok, trg_tok=self.trg_tok)
+        self.model = Transformer(self.src_tok.get_vocab_size(), self.trg_tok.get_vocab_size(),
+                                 src_tok=self.src_tok, trg_tok=self.trg_tok)
 
         # Initialize weights
         self.model.apply(init_weights)
@@ -42,7 +43,7 @@ class LitTransformer(pl.LightningModule):
         # Inference
         return x
 
-    def training_step(self, batch, batch_idx):
+    def training_step(self, batch, batch_idx, prefix="train"):
         # Run one mini-batch
         src, src_mask, trg, trg_mask = batch
         batch_size = src.shape[0]
@@ -51,41 +52,62 @@ class LitTransformer(pl.LightningModule):
         output, _ = self.model(src, src_mask, trg[:, :-1], trg_mask[:, :-1])
 
         # Reshape output / target
-        # Let's presume that after the <eos> everything has be predicted as <pad>,
+        # Let's assume that after the <eos> everything has be predicted as <pad>,
         # and then, we will ignore the pads in the CrossEntropy
-        _output = output.contiguous().view(-1, output.shape[-1])  # (B, L, vocab) => (B*L, vocab)
-        _trg = trg[:, 1:].contiguous().view(-1)  # Remove <sos> and reshape to vector (B*L)
+        output = output.contiguous().view(-1, output.shape[-1])  # (B, L, vocab) => (B*L, vocab)
+        trg = trg[:, 1:].contiguous().view(-1)  # Remove <sos> and reshape to vector (B*L)
         ##############################
 
         # Compute loss
-        loss = self.criterion(_output, _trg.type(torch.long))
+        loss = self.criterion(output, trg)
 
         # For debugging
         if self.show_translations:
-            _src = src.detach()
-            _output = torch.argmax(_output.detach(), dim=1).reshape(batch_size, -1)
-            _trg = _trg.detach().reshape(batch_size, -1)
-            src_dec = self.src_tok.decode(_src)
-            hyp_dec = self.trg_tok.decode(_output)
-            ref_dec = self.trg_tok.decode(_trg)
+            src_dec = self.src_tok.decode(src)
+            hyp_dec = self.trg_tok.decode(torch.argmax(output.detach(), dim=1).reshape(batch_size, -1))
+            ref_dec = self.trg_tok.decode(trg.detach().reshape(batch_size, -1))
             print_translations(hypothesis=hyp_dec, references=ref_dec, source=src_dec, limit=1)
 
         # Logging to TensorBoard by default
-        self.log('train_loss', loss)
-        self.log('train_ppl', math.exp(loss))
+        self.log(f'{prefix}_loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+        self.log(f'{prefix}_ppl', math.exp(loss), on_step=True, on_epoch=True, prog_bar=True, logger=True)
         return loss
 
     def validation_step(self, batch, batch_idx, prefix="val"):
-        self._shared_eval(batch, batch_idx, prefix)
+        # Run one mini-batch
+        src, src_mask, trg, trg_mask = batch
+        batch_size = src.shape[0]
+
+        # Get output
+        output, _ = self.model(src, src_mask, trg[:, :-1], trg_mask[:, :-1])
+
+        # Reshape output / target
+        # Let's assume that after the <eos> everything has be predicted as <pad>,
+        # and then, we will ignore the pads in the CrossEntropy
+        output = output.contiguous().view(-1, output.shape[-1])  # (B, L, vocab) => (B*L, vocab)
+        trg = trg[:, 1:].contiguous().view(-1)  # Remove <sos> and reshape to vector (B*L)
+        ##############################
+
+        # Compute loss
+        loss = self.criterion(output, trg)
+
+        # For debugging
+        if self.show_translations:
+            src_dec = self.src_tok.decode(src)
+            hyp_dec = self.trg_tok.decode(torch.argmax(output.detach(), dim=1).reshape(batch_size, -1))
+            ref_dec = self.trg_tok.decode(trg.detach().reshape(batch_size, -1))
+            print_translations(hypothesis=hyp_dec, references=ref_dec, source=src_dec, limit=1)
 
         # Logging to TensorBoard by default
-        self.log(f'{prefix}_blue', 0)
+        self.log(f'{prefix}_loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+        self.log(f'{prefix}_ppl', math.exp(loss), on_step=True, on_epoch=True, prog_bar=True, logger=True)
+        return loss
 
-    def test_step(self, batch, batch_idx, prefix="test"):
-        self._shared_eval(batch, batch_idx, prefix)
-
-        # Logging to TensorBoard by default
-        self.log(f'{prefix}_blue', 0)
+    # def test_step(self, batch, batch_idx, prefix="test"):
+    #     self._shared_eval(batch, batch_idx, prefix)
+    #
+    #     # Logging to TensorBoard by default
+    #     self.log(f'{prefix}_blue', 0)
 
     def _shared_eval(self, batch, batch_idx, prefix):
         src, src_mask, trg, trg_mask = batch

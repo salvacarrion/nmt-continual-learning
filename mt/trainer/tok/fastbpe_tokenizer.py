@@ -27,12 +27,18 @@ def encode(examples):
 
 def collate_fn(examples, tok_src, tok_trg, max_tokens):
     # Decompose examples
-    _src = [x['src'] for x in examples]
-    _trg = [x['trg'] for x in examples]
+    src = [x['src'] for x in examples]
+    trg = [x['trg'] for x in examples]
 
     # Processed examples
-    src = tok_src.pad(_src, keys=['ids', 'attention_mask'])
-    trg = tok_trg.pad(_trg, keys=['ids', 'attention_mask'])
+    src = tok_src.pad(src, keys=['ids', 'attention_mask'])
+    trg = tok_trg.pad(trg, keys=['ids', 'attention_mask'])
+
+    # From list to tensor
+    src['ids'] = torch.stack(src['ids'], dim=0)
+    src['attention_mask'] = torch.stack(src['attention_mask'], dim=0)
+    trg['ids'] = torch.stack(trg['ids'], dim=0)
+    trg['attention_mask'] = torch.stack(trg['attention_mask'], dim=0)
 
     # Limit tokens
     batch_size, max_len = len(src['ids']), len(src['ids'][0])
@@ -41,14 +47,13 @@ def collate_fn(examples, tok_src, tok_trg, max_tokens):
     # Select indices
     if max_batch < batch_size:
         rnd_idxs = np.random.choice(np.arange(0, max_batch), size=max_batch, replace=False)
-        src['ids'] = [src['ids'][i] for i in rnd_idxs]
-        src['attention_mask'] = [src['attention_mask'][i] for i in rnd_idxs]
-        trg['ids'] = [trg['ids'][i] for i in rnd_idxs]
-        trg['attention_mask'] = [trg['attention_mask'][i] for i in rnd_idxs]
+        src['ids'] = src['ids'][rnd_idxs]
+        src['attention_mask'] = src['attention_mask'][rnd_idxs]
+        trg['ids'] = trg['ids'][rnd_idxs]
+        trg['attention_mask'] = trg['attention_mask'][rnd_idxs]
 
     # Convert list to PyTorch tensor
-    new_examples = [torch.stack(src['ids']).type(torch.long), torch.stack(src['attention_mask']).type(torch.bool),
-                    torch.stack(trg['ids']).type(torch.long), torch.stack(trg['attention_mask']).type(torch.bool)]
+    new_examples = [src['ids'], src['attention_mask'], trg['ids'], trg['attention_mask']]
     return new_examples
 
 
@@ -71,6 +76,9 @@ class FastBPETokenizer:
         self.idx2word = {}
 
         # Other
+        self.padding = padding
+        self.truncation = truncation
+        self.max_length = max_length
         self.lang = lang
 
     def get_vocab_size(self):
@@ -140,7 +148,10 @@ class FastBPETokenizer:
         return [[(ii, jj) for ii, jj in zip(i, j)] for i, j in zip(self.decode(x, return_str=False, decode_bpe=False, remove_special_tokens=False), mask.cpu().numpy())]
 
     def encode_sample(self, x, mask_eos=False):
-        tokens = [self.SOS_WORD] + [w if w in self.word2idx else self.UNK_WORD for w in x.split(' ')] + [self.EOS_WORD]
+        tokens = [w if w in self.word2idx else self.UNK_WORD for w in x.split(' ')]
+        tokens = tokens[:(self.max_length-2)] if self.truncation else tokens  # Trucante two extra due to sos/eos
+        tokens = [self.SOS_WORD] + tokens + [self.EOS_WORD]
+
         ids = [self.word2idx[w] for w in tokens]
         attention_mask = [1]*len(ids)
 

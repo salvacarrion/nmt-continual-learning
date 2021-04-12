@@ -13,8 +13,8 @@ from trainer.tok.fastbpe_tokenizer import FastBPETokenizer
 def get_tokenizers(datapath, src, trg, use_fastbpe):
     # Define Tokenizer
     if use_fastbpe:
-        lt_src = FastBPETokenizer(padding=False, truncation=False, max_length=5000, lang=src)
-        lt_trg = FastBPETokenizer(padding=False, truncation=False, max_length=5000, lang=trg)
+        lt_src = FastBPETokenizer(padding=False, truncation=True, max_length=200, lang=src)
+        lt_trg = FastBPETokenizer(padding=False, truncation=True, max_length=200, lang=trg)
 
         # Load vocab
         lt_src.load_vocab(os.path.join(datapath, f"codes.{src}"),
