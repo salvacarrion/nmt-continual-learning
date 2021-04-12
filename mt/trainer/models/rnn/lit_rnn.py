@@ -36,8 +36,6 @@ class LitRNN(pl.LightningModule):
 
         # Set loss (ignore when the target token is <pad>)
         self.pad_idx = self.trg_tok.word2idx[lt_trg.PAD_WORD]
-        self.softmax = nn.Softmax(dim=2)
-
         self.criterion = nn.CrossEntropyLoss(ignore_index=self.pad_idx)
 
     def forward(self, x):
