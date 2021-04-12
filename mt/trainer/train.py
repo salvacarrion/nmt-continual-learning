@@ -8,7 +8,7 @@ from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 
 from mt.preprocess import DATASETS_PATH, LOGS_PATH, utils
 from mt import helpers
-from mt.trainer.models.transformer.lit_transformer import LitTransformer, init_weights
+from mt.trainer.models.transformer_old.lit_transformer import LitTransformer, init_weights
 from mt.trainer.models.rnn.lit_rnn import LitRNN, init_weights
 
 
