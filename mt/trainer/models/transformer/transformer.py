@@ -227,10 +227,10 @@ class DecoderLayer(nn.Module):
 class Transformer(nn.Module):
 
     def __init__(self, src_vocab_size, trg_vocab_size,
-                 d_model=512,
-                 enc_layers=6, dec_layers=6,
+                 d_model=256,
+                 enc_layers=3, dec_layers=3,
                  enc_heads=8, dec_heads=8,
-                 enc_dff_dim=2048, dec_dff_dim=2048,
+                 enc_dff_dim=512, dec_dff_dim=512,
                  enc_dropout=0.1, dec_dropout=0.1,
                  max_src_len=2000, max_trg_len=2000, src_tok=None, trg_tok=None):
         super().__init__()

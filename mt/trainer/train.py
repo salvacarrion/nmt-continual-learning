@@ -31,7 +31,7 @@ def get_model(model_name, lt_src, lt_trg):
 
 
 # Use zero workers when debugging to avoid freezing
-def train_model(datapath, src, trg, model_name, bpe_folder, domain=None, batch_size=32, max_tokens=4096, num_workers=0):
+def train_model(datapath, src, trg, model_name, bpe_folder, domain=None, batch_size=32//2, max_tokens=4096//2, num_workers=0):
     logger = TensorBoardLogger(LOGS_PATH, name=model_name)
 
     # Load tokenizers
@@ -41,13 +41,13 @@ def train_model(datapath, src, trg, model_name, bpe_folder, domain=None, batch_s
     datasets = helpers.load_dataset(os.path.join(datapath, bpe_folder), src, trg, splits=["train", "val", "test"])
 
     # Prepare data loaders
-    train_loader = helpers.build_dataloader(datasets["val"], lt_src, lt_trg, batch_size=batch_size, max_tokens=max_tokens, num_workers=num_workers)
-    val_loader = helpers.build_dataloader(datasets["val"], lt_src, lt_trg, batch_size=batch_size, max_tokens=max_tokens, num_workers=num_workers, shuffle=False)
+    train_loader = helpers.build_dataloader(datasets["train"], lt_src, lt_trg, batch_size=batch_size, max_tokens=max_tokens, num_workers=num_workers)
+    #val_loader = helpers.build_dataloader(datasets["val"], lt_src, lt_trg, batch_size=batch_size, max_tokens=max_tokens, num_workers=num_workers, shuffle=False)
     # test_loader = helpers.build_dataloader(datasets["test"], lt_src, lt_trg, batch_size=batch_size, max_tokens=max_tokens, num_workers=num_workers, shuffle=False)
 
     # Instantiate model
     model = get_model(model_name, lt_src, lt_trg)
-    model.show_translations = True
+    model.show_translations = False
 
     # Callbacks
     callbacks = [
@@ -72,7 +72,7 @@ def train_model(datapath, src, trg, model_name, bpe_folder, domain=None, batch_s
         deterministic=True)
 
     # Perform training
-    trainer.fit(model, train_dataloader=train_loader, val_dataloaders=val_loader)
+    trainer.fit(model, train_dataloader=train_loader, val_dataloaders=None)
 
     # # Perform evaluation
     # trainer.test(model, test_loader)
