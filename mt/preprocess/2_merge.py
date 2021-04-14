@@ -1,7 +1,7 @@
 import os
 import pandas as pd
 
-from mt.preprocess import RAW_PATH
+from mt import RAW_PATH
 from mt.preprocess import utils
 
 

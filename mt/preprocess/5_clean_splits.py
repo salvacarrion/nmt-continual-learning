@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 import subprocess
 
-from mt.preprocess import DATASETS_PATH, DATASET_CLEAN_NAME
+from mt import DATASETS_PATH, DATASET_CLEAN_NAME
 from mt.preprocess import utils
 
 vocab_size = 32000

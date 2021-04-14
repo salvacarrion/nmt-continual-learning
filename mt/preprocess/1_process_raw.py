@@ -3,7 +3,7 @@ import pandas as pd
 from pathlib import Path
 import numpy as np
 
-from mt.preprocess import RAW_PATH
+from mt import RAW_PATH
 from mt.preprocess import utils
 
 SUFFLE = True

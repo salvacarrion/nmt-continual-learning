@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 
-from mt.preprocess import DATASETS_PATH, DATASET_SPLITS_NAME, VOCAB_SIZE
+from mt import DATASETS_PATH, DATASET_SPLITS_NAME, VOCAB_SIZE
 from mt.preprocess import utils
 
 from trainer.tok.lit_tokenizer import LitTokenizer

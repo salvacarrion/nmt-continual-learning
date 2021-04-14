@@ -9,7 +9,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
-from mt.preprocess import DATASETS_PATH, LOGS_PATH, utils
+from mt.preprocess import utils
 from mt import helpers
 from mt.trainer.models.transformer_old.transformer import Encoder, Decoder, Seq2Seq, init_weights
 from mt.helpers import print_translations

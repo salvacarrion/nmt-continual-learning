@@ -6,8 +6,9 @@ from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 
-from mt.preprocess import DATASETS_PATH, LOGS_PATH, utils
+from mt.preprocess import utils
 from mt import helpers
+from mt import DATASETS_PATH, LOGS_PATH
 from mt.trainer.models.transformer.lit_transformer import LitTransformer, init_weights
 from mt.trainer.models.rnn.lit_rnn import LitRNN, init_weights
 
@@ -46,8 +47,8 @@ def train_model(datapath, src, trg, model_name, bpe_folder, domain=None, batch_s
     # test_loader = helpers.build_dataloader(datasets["test"], lt_src, lt_trg, batch_size=batch_size, max_tokens=max_tokens, num_workers=num_workers, shuffle=False)
 
     # Instantiate model
-    model = get_model(model_name, lt_src, lt_trg)
-    model.show_translations = False
+    litmodel = get_model(model_name, lt_src, lt_trg)
+    litmodel.show_translations = False
 
     # Callbacks
     callbacks = [
@@ -72,7 +73,7 @@ def train_model(datapath, src, trg, model_name, bpe_folder, domain=None, batch_s
         deterministic=True)
 
     # Perform training
-    trainer.fit(model, train_dataloader=train_loader, val_dataloaders=None)
+    trainer.fit(litmodel, train_dataloader=train_loader, val_dataloaders=None)
 
     # # Perform evaluation
     # trainer.test(model, test_loader)

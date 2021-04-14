@@ -4,7 +4,7 @@ import numpy as np
 from pathlib import Path
 from sklearn.model_selection import train_test_split
 
-from mt.preprocess import RAW_PATH, DATASETS_PATH, DATASET_RAW_NAME
+from mt import RAW_PATH, DATASETS_PATH, DATASET_RAW_NAME
 from mt.preprocess import utils
 
 SUFFLE = True

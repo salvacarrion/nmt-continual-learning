@@ -109,46 +109,10 @@ class LitTransformer(pl.LightningModule):
         self.log(f'{prefix}_ppl', math.exp(loss), on_step=True, on_epoch=True, prog_bar=True, logger=True)
         return loss
 
-    # def test_step(self, batch, batch_idx, prefix="test"):
-    #     self._shared_eval(batch, batch_idx, prefix)
-    #
-    #     # Logging to TensorBoard by default
-    #     self.log(f'{prefix}_blue', 0)
+    def test_step(self, batch, batch_idx, prefix="test"):
+        pass
 
-    def _shared_eval(self, batch, batch_idx, prefix):
-        src, src_mask, trg, trg_mask = batch
-
-        # Get indexes
-        sos_idx = self.trg_tok.word2idx[self.trg_tok.SOS_WORD]
-        eos_idx = self.trg_tok.word2idx[self.trg_tok.EOS_WORD]
-
-        # Get output
-        final_candidates = self.model.translate_batch(src, src_mask, sos_idx, eos_idx, self.max_length, self.beam_width)
-        outputs_ids = [top_trans[0][0] for top_trans in final_candidates]
-
-        # Convert ids2words
-        y_pred = self.trg_tok.decode(outputs_ids)
-        y_true = self.trg_tok.decode(trg)
-
-        # Print translations
-        if self.show_translations:
-            print_translations(y_pred, y_true)
-
-        # # Compute bleu
-        # bleu_scores = []
-        # for sys, ref in zip(y_pred, y_true):
-        #     bleu = sacrebleu.corpus_bleu([sys], [[ref]])
-        #     bleu_scores.append(bleu)
-        # avg_bleu = sum(bleu_scores)/len(bleu_scores)
-        # return output, losses, metrics
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
         return optimizer
-
-    # def on_after_backward(self):
-    #     global_step = self.global_step
-    #     for name, param in self.model.named_parameters():
-    #         self.logger.experiment.add_histogram(name, param, global_step)
-    #         if param.requires_grad:
-    #             self.logger.experiment.add_histogram(f"{name}_grad", param.grad, global_step)

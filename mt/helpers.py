@@ -8,6 +8,7 @@ from datasets import Dataset
 
 from trainer.tok.lit_tokenizer import LitTokenizer
 from trainer.tok.fastbpe_tokenizer import FastBPETokenizer
+from tqdm import tqdm
 
 
 def get_tokenizers(datapath, src, trg, use_fastbpe):
@@ -119,3 +120,26 @@ def print_translations(hypothesis, references, source=None, limit=None):
         # Set limit
         if limit and i+1 >= limit:
             break
+
+
+def generate_translations(model, tok_trg, data_loader, max_length, beam_width):
+    y_pred = []
+    y_true = []
+    for batch in tqdm(data_loader, total=len(data_loader)):
+        src, src_mask, trg, trg_mask = batch
+
+        # Get indexes
+        sos_idx = tok_trg.word2idx[tok_trg.SOS_WORD]
+        eos_idx = tok_trg.word2idx[tok_trg.EOS_WORD]
+
+        # Get output
+        translations = model.translate_batch(src, src_mask, sos_idx, eos_idx, max_length=max_length, beam_width=beam_width)
+
+        # Keep only best
+        outputs_ids = [top_trans[0][0] for top_trans in translations]
+
+        # Convert ids2words
+        y_pred += tok_trg.decode(outputs_ids)
+        y_true += tok_trg.decode(trg)
+
+    return y_pred, y_true

@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from mt.preprocess import DATASETS_PATH, DATASET_RAW_NAME
+from mt import DATASETS_PATH, DATASET_RAW_NAME
 from mt.preprocess import utils
 
 

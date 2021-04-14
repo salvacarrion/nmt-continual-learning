@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 import subprocess
 
-from mt.preprocess import DATASETS_PATH, DATASET_BPE_NAME, FASTBPE_PATH, VOCAB_SIZE
+from mt import DATASETS_PATH, DATASET_BPE_NAME, FASTBPE_PATH, VOCAB_SIZE
 from mt.preprocess import utils
 
 
