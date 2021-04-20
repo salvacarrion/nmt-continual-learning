@@ -20,7 +20,7 @@ def encode(examples):
 
     # Encode samples
     src_tokenized = [tok_src.encode_sample(x, mask_eos=False) for x in src_tokenized]
-    trg_tokenized = [tok_trg.encode_sample(x, mask_eos=True) for x in trg_tokenized]
+    trg_tokenized = [tok_trg.encode_sample(x, mask_eos=False) for x in trg_tokenized]
 
     return {'src': src_tokenized, 'trg': trg_tokenized}
 
