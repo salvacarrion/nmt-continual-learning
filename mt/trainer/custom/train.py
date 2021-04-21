@@ -30,7 +30,9 @@ BPE_FOLDER = "bpe.32000"
 MAX_EPOCHS = 50
 LEARNING_RATE = 1e-3
 WARMUP_UPDATES = 4000
-PATIENCE = 5
+PATIENCE = 10
+ACC_GRADIENTS = 1
+WEIGHT_DECAY = 0.0001
 DEVICE1 = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 DEVICE2 = None  #torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -53,7 +55,7 @@ torch.backends.cudnn.benchmark = False
 ###########################################################################
 
 
-def run_experiment(datapath, src, trg, model_name, bpe_folder, domain=None, batch_size=32, max_tokens=4096, num_workers=0):
+def run_experiment(datapath, src, trg, model_name, bpe_folder, domain=None, batch_size=32//2, max_tokens=4096//2, num_workers=0):
     checkpoint_path = os.path.join(datapath, DATASET_CHECKPOINT_NAME, f"{model_name}_{domain}_best.pt")
 
     # Load tokenizers
@@ -72,7 +74,7 @@ def run_experiment(datapath, src, trg, model_name, bpe_folder, domain=None, batc
     # model1.load_state_dict(torch.load(checkpoint_path))
     model1.to(DEVICE1)
     optimizer1 = ScheduledOptim(
-        optim.Adam(model1.parameters(), betas=(0.9, 0.98), eps=1e-09, lr=LEARNING_RATE),
+        optim.Adam(model1.parameters(), betas=(0.9, 0.98), eps=1e-09, lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY),
         model1.d_model, WARMUP_UPDATES)
 
     # Set loss (ignore when the target token is <pad>)
@@ -116,7 +118,7 @@ def fit(model_opt1, model_opt2, train_loader, val_loader, epochs, criterion, che
 
             else:
                 # Early stop
-                if (epoch_i-last_checkpoint) >= PATIENCE:
+                if PATIENCE != -1 and (epoch_i-last_checkpoint) >= PATIENCE:
                     print(f"Early stop. Validation loss didn't improve for {PATIENCE} epochs")
                     break
 
@@ -137,7 +139,7 @@ def gen_nopeek_mask(length):
     return mask
 
 
-def train(model_opt1, model_opt2, data_loader, criterion, clip=0.25, log_interval=1, epoch_i=None, tb_writer=None):
+def train(model_opt1, model_opt2, data_loader, criterion, clip=1.0, log_interval=1, epoch_i=None, tb_writer=None):
     total_loss = 0.0
     all_metrics = []
     start_time = time.time()
@@ -147,6 +149,9 @@ def train(model_opt1, model_opt2, data_loader, criterion, clip=0.25, log_interva
     (model2, optimizer2) = model_opt2
 
     model1.train()
+    optimizer1.zero_grad()
+
+    loss = 0
     for i, batch in enumerate(data_loader):
         # Get batch data
         src1, src_mask1, trg1, trg_mask1 = [x.to(DEVICE1) for x in batch]
@@ -162,15 +167,21 @@ def train(model_opt1, model_opt2, data_loader, criterion, clip=0.25, log_interva
         tgt_mask = gen_nopeek_mask(tgt_inp.shape[1]).to(DEVICE1)  # To not look tokens ahead
 
         # Get output
-        optimizer1.zero_grad()
         output1 = model1(src1, tgt_inp, src_key_padding_mask, tgt_key_padding_mask[:, :-1], memory_key_padding_mask, tgt_mask)
         loss = criterion(rearrange(output1, 'b t v -> (b t) v'), rearrange(tgt_out, 'b o -> (b o)'))
 
-        # Backpropagate and update optim
+        # Compute backward
         loss.backward()
-        optimizer1.step_and_update_lr()
-
         total_loss += loss.item()
+
+        # Accumulate gradients
+        if (i+1) % ACC_GRADIENTS or (i+1) == len(data_loader):
+            # Clip params
+            torch.nn.utils.clip_grad_norm_(model1.parameters(), clip)
+
+            # Update parameters
+            optimizer1.step_and_update_lr()
+            optimizer1.zero_grad()
 
         # Log progress
         if (i+1) % log_interval == 0:
