@@ -25,9 +25,9 @@ from mt.trainer.models.pytransformer.transformer import TransformerModel
 from mt.trainer.models.optim import  ScheduledOptim
 
 MODEL_NAME = "transformer"
-BPE_FOLDER = "bpe.8000"
+BPE_FOLDER = "bpe.32000"
 
-MAX_EPOCHS = 1000
+MAX_EPOCHS = 50
 LEARNING_RATE = 1e-3
 WARMUP_UPDATES = 4000
 PATIENCE = 5
@@ -278,8 +278,8 @@ def get_translations(src, trg, trg_pred, src_tok, trg_tok):
 
 if __name__ == "__main__":
     # Get all folders in the root path
-    # datasets = [os.path.join(DATASETS_PATH, name) for name in os.listdir(DATASETS_PATH) if os.path.isdir(os.path.join(DATASETS_PATH, name))]
-    datasets = [os.path.join(DATASETS_PATH, "tmp|health_es-en")]
+    #datasets = [os.path.join(DATASETS_PATH, name) for name in os.listdir(DATASETS_PATH) if os.path.isdir(os.path.join(DATASETS_PATH, name))]
+    datasets = [os.path.join(DATASETS_PATH, "health_es-en")]
     for dataset in datasets:
         domain, (src, trg) = utils.get_dataset_ids(dataset)
         fname_base = f"{domain}_{src}-{trg}"
