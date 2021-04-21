@@ -5,6 +5,7 @@ import time
 import math
 from pathlib import Path
 from einops import rearrange
+import wandb
 
 import torch
 import torch.nn as nn
@@ -27,11 +28,12 @@ from mt.trainer.models.optim import  ScheduledOptim
 MODEL_NAME = "transformer"
 BPE_FOLDER = "bpe.16000"
 
+
 MAX_EPOCHS = 50
 LEARNING_RATE = 1e-3
 WARMUP_UPDATES = 4000
 PATIENCE = 10
-ACC_GRADIENTS = 8
+ACC_GRADIENTS = 1
 WEIGHT_DECAY = 0.0001
 MULTIGPU = False
 DEVICE1 = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -55,6 +57,20 @@ torch.backends.cudnn.benchmark = False
 ###########################################################################
 ###########################################################################
 
+wandb.init(project='nmt', entity='salvacarrion')
+config = wandb.config
+config.max_epochs = MAX_EPOCHS
+config.learning_rate = LEARNING_RATE
+config.warmup_updates = WARMUP_UPDATES
+config.patience = PATIENCE
+config.acc_gradients = ACC_GRADIENTS
+config.weight_decay = WEIGHT_DECAY
+config.multigpu = MULTIGPU
+config.device1 = str(DEVICE1)
+config.device2 = str(DEVICE2)
+
+###########################################################################
+###########################################################################
 
 def run_experiment(datapath, src, trg, model_name, bpe_folder, domain=None, batch_size=32, max_tokens=4096, num_workers=0):
     checkpoint_path = os.path.join(datapath, DATASET_CHECKPOINT_NAME, f"{model_name}_{domain}_best.pt")
@@ -266,6 +282,7 @@ def log_progress(prefix, total_loss, epoch_i, batch_i, n_batches, start_time, tb
     if tb_writer:
         for k, v in metrics.items():
             tb_writer.add_scalar(f'{prefix}_{k.lower()}', v, total_minibatches)
+            wandb.log({f'{prefix}_{k.lower()}': v})
 
     return metrics
 

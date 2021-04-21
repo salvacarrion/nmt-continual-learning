@@ -26,5 +26,7 @@ jupyter==1.0.0
 
 fastBPE==0.1.0
 
-einops
-torchtext
+einops==0.3.0
+torchtext==0.9.1
+torchmetrics==0.2.0
+wandb==0.10.17
