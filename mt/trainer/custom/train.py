@@ -28,7 +28,7 @@ MODEL_NAME = "transformer"
 BPE_FOLDER = "bpe.8000"
 
 MAX_EPOCHS = 1000
-LEARNING_RATE = 1e-4
+LEARNING_RATE = 1e-3
 WARMUP_UPDATES = 4000
 PATIENCE = 5
 DEVICE1 = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -54,6 +54,8 @@ torch.backends.cudnn.benchmark = False
 
 
 def run_experiment(datapath, src, trg, model_name, bpe_folder, domain=None, batch_size=32, max_tokens=4096, num_workers=0):
+    checkpoint_path = os.path.join(datapath, DATASET_CHECKPOINT_NAME, f"{model_name}_{domain}_best.pt")
+
     # Load tokenizers
     src_tok, trg_tok = helpers.get_tokenizers(os.path.join(datapath, bpe_folder), src, trg, use_fastbpe=True)  # use_fastbpe != apply_fastbpe
 
@@ -61,17 +63,16 @@ def run_experiment(datapath, src, trg, model_name, bpe_folder, domain=None, batc
     datasets = helpers.load_dataset(os.path.join(datapath, bpe_folder), src, trg, splits=["train", "val", "test"])
 
     # Prepare data loaders
-    train_loader = helpers.build_dataloader(datasets["test"], src_tok, trg_tok, batch_size=batch_size, max_tokens=max_tokens, num_workers=num_workers)
+    train_loader = helpers.build_dataloader(datasets["train"], src_tok, trg_tok, batch_size=batch_size, max_tokens=max_tokens, num_workers=num_workers)
     val_loader = helpers.build_dataloader(datasets["val"], src_tok, trg_tok, batch_size=batch_size, max_tokens=max_tokens, num_workers=num_workers, shuffle=False)
     # test_loader = helpers.build_dataloader(datasets["test"], src_tok, trg_tok, batch_size=batch_size, max_tokens=max_tokens, num_workers=num_workers, shuffle=False)
 
     # Instantiate model #1
     model1 = TransformerModel(src_tok=src_tok, trg_tok=trg_tok)
-    checkpoint_path = os.path.join(datapath, DATASET_CHECKPOINT_NAME, f"{model_name}_best.pt")
-    model1.load_state_dict(torch.load(checkpoint_path))
+    # model1.load_state_dict(torch.load(checkpoint_path))
     model1.to(DEVICE1)
     optimizer1 = ScheduledOptim(
-        optim.Adam(model1.parameters(), betas=(0.9, 0.98), eps=1e-09),
+        optim.Adam(model1.parameters(), betas=(0.9, 0.98), eps=1e-09, lr=LEARNING_RATE),
         model1.d_model, WARMUP_UPDATES)
 
     # Set loss (ignore when the target token is <pad>)
@@ -91,31 +92,33 @@ def run_experiment(datapath, src, trg, model_name, bpe_folder, domain=None, batc
 
 
 def fit(model_opt1, model_opt2, train_loader, val_loader, epochs, criterion, checkpoint_path, tr_writer=None, val_writer=None):
+    if not checkpoint_path:
+        print("[WARNING] Traning without checkpoint path. The model won't be saved.")
+
     lowest_val = 1e9
     last_checkpoint = 0
     for epoch_i in range(epochs):
-        start_time = time.time()
-
         # Train model
-        #tr_loss, tr_metrics = train(model_opt1, model_opt2, train_loader, criterion, epoch_i=epoch_i, tb_writer=tr_writer)
+        tr_loss, tr_metrics = train(model_opt1, model_opt2, train_loader, criterion, epoch_i=epoch_i, tb_writer=tr_writer)
 
         # Evaluate
         val_loss, val_metrics = evaluate(model_opt1[0], val_loader, criterion, epoch_i=epoch_i, tb_writer=val_writer)
 
         # Save checkpoint
-        if val_loss < lowest_val:
-            avg_bleu = sum([x["torch_bleu"] for x in val_metrics]) / len(val_metrics)
-            print(f"New best score! Loss={val_loss} | BLEU={avg_bleu}. (Saving checkpoint...)")
-            last_checkpoint = epoch_i
-            lowest_val = val_loss
-            torch.save(model_opt1[0].state_dict(), checkpoint_path)
-            print("=> Checkpoint saved!")
+        if checkpoint_path:
+            if val_loss < lowest_val:
+                avg_bleu = sum([x["torch_bleu"] for x in val_metrics]) / len(val_metrics)
+                print(f"New best score! Loss={val_loss} | BLEU={avg_bleu}. (Saving checkpoint...)")
+                last_checkpoint = epoch_i
+                lowest_val = val_loss
+                torch.save(model_opt1[0].state_dict(), checkpoint_path)
+                print("=> Checkpoint saved!")
 
-        else:
-            # Early stop
-            if (epoch_i-last_checkpoint) >= PATIENCE:
-                print(f"Early stop. Validation loss didn't improve for {PATIENCE} epochs")
-                break
+            else:
+                # Early stop
+                if (epoch_i-last_checkpoint) >= PATIENCE:
+                    print(f"Early stop. Validation loss didn't improve for {PATIENCE} epochs")
+                    break
 
 
 def gen_nopeek_mask(length):
@@ -227,6 +230,7 @@ def evaluate(model, data_loader, criterion, log_interval=1, epoch_i=None, tb_wri
 
 def log_progress(prefix, total_loss, epoch_i, batch_i, n_batches, start_time, tb_writer, translations=None):
     elapsed = time.time() - start_time
+    sec_per_batch = elapsed / batch_i
     total_minibatches = (epoch_i - 1) * n_batches + batch_i
 
     # Compute metrics
@@ -253,8 +257,8 @@ def log_progress(prefix, total_loss, epoch_i, batch_i, n_batches, start_time, tb
 
     # Print stuff
     str_metrics = "| ".join(["{}: {:.3f}".format(k, v) for k, v in metrics.items()])
-    print('| Epoch: #{:<3} | {:>3}/{:} batches | {:.2f} ms/batch || {}'.format(
-        epoch_i, batch_i, n_batches, elapsed / batch_i, str_metrics))
+    print('[{}] | Epoch: #{:<3} | {:>3}/{:} batches | {:.2f} sec/it (est.: {:.2f} min) || {}'.format(
+        prefix.title(), epoch_i, batch_i, n_batches, sec_per_batch, (n_batches-batch_i)*sec_per_batch/60, str_metrics))
 
     # Tensorboard
     if tb_writer:
