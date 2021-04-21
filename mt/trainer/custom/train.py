@@ -3,26 +3,32 @@ import numpy as np
 import random
 import time
 import math
+from pathlib import Path
+from einops import rearrange
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.tensorboard import SummaryWriter
-import torch.nn.functional as F
+
+import torchtext
+import sacrebleu
+from datasets import load_metric
 
 from tqdm import tqdm
 
 from mt.preprocess import utils
 from mt import helpers
-from mt import DATASETS_PATH, LOGS_PATH
+from mt import DATASETS_PATH, DATASET_LOGS_NAME, DATASET_CHECKPOINT_NAME
 from mt.trainer.models.pytransformer.transformer import TransformerModel
-
+from mt.trainer.models.optim import  ScheduledOptim
 
 MODEL_NAME = "transformer"
 BPE_FOLDER = "bpe.8000"
 
 MAX_EPOCHS = 1000
-LEARNING_RATE = 1e-2
+LEARNING_RATE = 1e-4
 DEVICE1 = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 DEVICE2 = None  #torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -45,12 +51,7 @@ torch.backends.cudnn.benchmark = False
 ###########################################################################
 
 
-def init_weights(m):
-    if hasattr(m, 'weight') and m.weight.dim() > 1:
-        nn.init.xavier_uniform_(m.weight.data)
-
-
-def run_experiment(datapath, src, trg, model_name, bpe_folder, domain=None, batch_size=32//2, max_tokens=4096//2, num_workers=0):
+def run_experiment(datapath, src, trg, model_name, bpe_folder, domain=None, batch_size=32, max_tokens=4096, num_workers=0):
     # Load tokenizers
     src_tok, trg_tok = helpers.get_tokenizers(os.path.join(datapath, bpe_folder), src, trg, use_fastbpe=True)  # use_fastbpe != apply_fastbpe
 
@@ -58,45 +59,72 @@ def run_experiment(datapath, src, trg, model_name, bpe_folder, domain=None, batc
     datasets = helpers.load_dataset(os.path.join(datapath, bpe_folder), src, trg, splits=["train", "val", "test"])
 
     # Prepare data loaders
-    train_loader = helpers.build_dataloader(datasets["val"], src_tok, trg_tok, batch_size=batch_size, max_tokens=max_tokens, num_workers=num_workers)
+    train_loader = helpers.build_dataloader(datasets["train"], src_tok, trg_tok, batch_size=batch_size, max_tokens=max_tokens, num_workers=num_workers)
     val_loader = helpers.build_dataloader(datasets["val"], src_tok, trg_tok, batch_size=batch_size, max_tokens=max_tokens, num_workers=num_workers, shuffle=False)
     # test_loader = helpers.build_dataloader(datasets["test"], src_tok, trg_tok, batch_size=batch_size, max_tokens=max_tokens, num_workers=num_workers, shuffle=False)
 
     # Instantiate model #1
     model1 = TransformerModel(src_tok=src_tok, trg_tok=trg_tok)
-    model1.apply(init_weights)
     model1.to(DEVICE1)
-    optimizer1 = optim.Adam(model1.parameters(), lr=LEARNING_RATE)
+    optimizer1 = ScheduledOptim(
+        optim.Adam(model1.parameters(), betas=(0.9, 0.98), eps=1e-09),
+        model1.d_model, 4000)
 
     # Set loss (ignore when the target token is <pad>)
     criterion = nn.CrossEntropyLoss(ignore_index=trg_tok.word2idx[trg_tok.PAD_WORD])
 
     # Tensorboard (it needs some epochs to start working ~10-20)
-    tr_writer = SummaryWriter(f"{model_name}/train")
-    val_writer = SummaryWriter(f"{model_name}/val")
+    tr_writer = SummaryWriter(os.path.join(datapath, DATASET_LOGS_NAME, f"{model_name}/train"))
+    val_writer = SummaryWriter(os.path.join(datapath, DATASET_LOGS_NAME, f"{model_name}/val"))
 
     # Train and validate model
     fit((model1, optimizer1), (None, None), train_loader, val_loader=val_loader,
         epochs=MAX_EPOCHS, criterion=criterion,
-        checkpoint_path=os.path.join(datapath, "checkpoint.pt"), tr_writer=tr_writer, val_writer=val_writer)
+        checkpoint_path=os.path.join(datapath, DATASET_CHECKPOINT_NAME, f"{model_name}_best.pt"), tr_writer=tr_writer, val_writer=val_writer)
 
     print("Done!")
 
 
 def fit(model_opt1, model_opt2, train_loader, val_loader, epochs, criterion, checkpoint_path, tr_writer=None, val_writer=None):
+    lowest_val = 1e9
     for epoch in range(epochs):
         start_time = time.time()
         n_iter = epoch + 1
 
         # Train model
-        train(model_opt1, model_opt2, train_loader, criterion, epoch_i=n_iter, tb_writer=tr_writer)
+        tr_loss, tr_metrics = train(model_opt1, model_opt2, train_loader, criterion, epoch_i=n_iter, tb_writer=tr_writer)
 
-        # # Evaluate model
-        # evaluate(model, val_loader, criterion, epoch_i=n_iter, tb_writer=val_writer)
+        # Evaluate
+        val_loss, val_metrics = evaluate(model_opt1[0], val_loader, criterion, epoch_i=n_iter, tb_writer=val_writer)
+
+        # Save checkpoint
+        if val_loss < lowest_val:
+            avg_bleu = sum([x["torch_bleu"] for x in val_metrics]) / len(val_metrics)
+            print(f"New best score! Loss={val_loss} | BLEU={avg_bleu}. (Saving checkpoint...)")
+            lowest_val = val_loss
+            torch.save(model_opt1[0].state_dict(), checkpoint_path)
+            print("=> Checkpoint saved!")
 
 
-def train(model_opt1, model_opt2, train_loader, criterion, clip=0.25, log_interval=1, epoch_i=None, tb_writer=None):
+def gen_nopeek_mask(length):
+    """
+     Returns the nopeek mask
+             Parameters:
+                     length (int): Number of tokens in each sentence in the target batch
+             Returns:
+                     mask (arr): tgt_mask, looks like [[0., -inf, -inf],
+                                                      [0., 0., -inf],
+                                                      [0., 0., 0.]]
+     """
+    mask = rearrange(torch.triu(torch.ones(length, length)) == 1, 'h w -> w h')
+    mask = mask.float().masked_fill(mask == 0, float('-inf')).masked_fill(mask == 1, float(0.0))
+
+    return mask
+
+
+def train(model_opt1, model_opt2, data_loader, criterion, clip=0.25, log_interval=1, epoch_i=None, tb_writer=None):
     total_loss = 0.0
+    all_metrics = []
     start_time = time.time()
 
     # Unpack values
@@ -104,129 +132,128 @@ def train(model_opt1, model_opt2, train_loader, criterion, clip=0.25, log_interv
     (model2, optimizer2) = model_opt2
 
     model1.train()
-    # for i, batch in tqdm(enumerate(train_loader), total=len(train_loader)):
-    for i, batch in enumerate(train_loader):
+    for i, batch in enumerate(data_loader):
         # Get batch data
         src1, src_mask1, trg1, trg_mask1 = [x.to(DEVICE1) for x in batch]
-        src_vocab1, trg_vocab1 = model1.src_tok.get_vocab_size(), model1.trg_tok.get_vocab_size()
         batch_size, src_max_len, trg_max_len = src1.shape[0], src1.shape[1], trg1.shape[1]
 
-        # Zero the parameter gradients
-        optimizer1.zero_grad()
+        # Create a padding mask (no-padded=0, padded=1)
+        src_key_padding_mask = ~src_mask1.type(torch.bool).to(DEVICE1)
+        tgt_key_padding_mask = ~trg_mask1.type(torch.bool).to(DEVICE1)
+        memory_key_padding_mask = src_key_padding_mask.clone()  # the src_mask used in the decoder
+
+        # Create tgt_inp and tgt_out (which is tgt_inp but shifted by 1)
+        tgt_inp, tgt_out = trg1[:, :-1], trg1[:, 1:]
+        tgt_mask = gen_nopeek_mask(tgt_inp.shape[1]).to(DEVICE1)  # To not look tokens ahead
 
         # Get output
-        output1 = model1(src1, src_mask1, trg1[:, :-1], trg_mask1[:, :-1])
-        _output1 = output1.detach().permute(1, 0, 2)
-        _src1 = src1.detach()
-        _trg1 = trg1.detach()
+        optimizer1.zero_grad()
+        output1 = model1(src1, tgt_inp, src_key_padding_mask, tgt_key_padding_mask[:, :-1], memory_key_padding_mask, tgt_mask)
+        loss = criterion(rearrange(output1, 'b t v -> (b t) v'), rearrange(tgt_out, 'b o -> (b o)'))
 
-        # For debugging
-        # We need to reshape the output to get the maximum probabilities for earch batch and position
-        # We subtract 1 to the max_len due to the <sos> removal
-        idxs = torch.argmax(output1.view(batch_size, trg_max_len - 1, trg_vocab1), dim=2)
-
-        src_dec = model1.src_tok.decode(_src1)
-        hyp_dec = model1.trg_tok.decode(idxs.view(batch_size, -1))
-        ref_dec = model1.trg_tok.decode(_trg1.detach().view(batch_size, -1))
-        helpers.print_translations(hypothesis=hyp_dec, references=ref_dec, source=src_dec, limit=1)
-
-        # Reshape output / target
-        # Let's assume that after the <eos> everything has be predicted as <pad>,
-        # and then, we will ignore the pads in the CrossEntropy
-        output1 = output1.contiguous().view(-1, trg_vocab1)  # (B, L, vocab) => (B*L, vocab)
-        trg1 = trg1[:, 1:].contiguous().view(-1)  # Remove <sos> and reshape to vector (B*L)
-
-        # Compute loss and backward => CE(I(N, C), T(N))
-        loss = criterion(output1, trg1)
+        # Backpropagate and update optim
         loss.backward()
-
-        # `clip_grad_norm` helps prevent the exploding gradient problem in RNNs / LSTMs.
-        #torch.nn.utils.clip_grad_norm_(model.parameters(), clip)
+        optimizer1.step_and_update_lr()
 
         total_loss += loss.item()
-        optimizer1.step()
 
         # Log progress
         if (i+1) % log_interval == 0:
-            log_progress("train", total_loss, epoch_i+1, i+1, len(train_loader), start_time, tb_writer)
+            metrics = log_progress("train", total_loss, epoch_i+1, i+1, len(data_loader), start_time, tb_writer)
+            all_metrics.append(metrics)
+
+    return total_loss / len(data_loader), all_metrics
 
 
-def log_progress(prefix, total_loss, epoch_i, batch_i, n_batches, start_time, tb_writer):
+def evaluate(model, data_loader, criterion, log_interval=1, epoch_i=None, tb_writer=None):
+    total_loss = 0.0
+    all_metrics = []
+    start_time = time.time()
+
+    model.eval()
+    for i, batch in enumerate(data_loader):
+        with torch.no_grad():
+            # Get batch data
+            src, src_mask, trg, trg_mask = [x.to(DEVICE1) for x in batch]
+            src_vocab1, trg_vocab1 = model.src_tok.get_vocab_size(), model.trg_tok.get_vocab_size()
+            batch_size, src_max_len, trg_max_len = src.shape[0], src.shape[1], trg.shape[1]
+
+            src_key_padding_mask = ~src_mask.type(torch.bool).to(DEVICE1)
+            tgt_key_padding_mask = ~trg_mask.type(torch.bool).to(DEVICE1)
+            memory_key_padding_mask = src_key_padding_mask.clone()
+
+            # Create tgt_inp and tgt_out (which is tgt_inp but shifted by 1)
+            tgt_inp, tgt_out = trg[:, :-1], trg[:, 1:]
+            tgt_mask = gen_nopeek_mask(tgt_inp.shape[1]).to(DEVICE1)
+
+            # Get output
+            outputs = model(src, tgt_inp, src_key_padding_mask, tgt_key_padding_mask[:, :-1], memory_key_padding_mask, tgt_mask)
+            loss = criterion(rearrange(outputs, 'b t v -> (b t) v'), rearrange(tgt_out, 'b o -> (b o)'))
+
+            total_loss += loss.item()
+
+            # Log progress
+            if (i+1) % log_interval == 0:
+                # Get translations
+                src_dec, ref_dec, hyp_dec = get_translations(outputs.detach(), src, trg, model.src_tok, model.trg_tok)
+
+                # Print translations
+                helpers.print_translations(hypothesis=hyp_dec, references=ref_dec, source=src_dec, limit=1)
+
+                # Log progress
+                metrics = log_progress("val", total_loss, epoch_i+1, i+1, len(data_loader), start_time, tb_writer, translations=(src_dec, ref_dec, hyp_dec))
+                all_metrics.append(metrics)
+    return total_loss / len(data_loader), all_metrics
+
+
+def log_progress(prefix, total_loss, epoch_i, batch_i, n_batches, start_time, tb_writer, translations=None):
     elapsed = time.time() - start_time
     total_minibatches = (epoch_i - 1) * n_batches + batch_i
 
     # Compute metrics
-    cur_loss = total_loss / batch_i
-    ppl = math.exp(cur_loss)
+    metrics = {
+        "loss": total_loss / batch_i,
+        "ppl": math.exp(total_loss / batch_i),
+    }
+
+    if translations:
+        src_dec, ref_dec, hyp_dec = translations
+
+        # Compute metrics
+        torch_bleu = torchtext.data.metrics.bleu_score([x.split(" ") for x in hyp_dec], [[x.split(" ")] for x in ref_dec])
+        metrics["torch_bleu"] = torch_bleu
+
+        # hg_bleu = load_metric("bleu").compute(predictions=[x.split(" ") for x in hyp_dec], references=[[x.split(" ")] for x in ref_dec])
+        # metrics["hg_bleu"] = hg_bleu["bleu"]
+        #
+        # hg_sacrebleu = load_metric("sacrebleu").compute(predictions=hyp_dec, references=[[x] for x in ref_dec])
+        # metrics["hg_sacrebleu"] = hg_sacrebleu["score"]
+
+        # metrics["ter"] = 0
+        # metrics["chrf"] = 0
 
     # Print stuff
-    print('| epoch: {:<3d} | {:5d}/{:5d} batches | ms/batch {:5.2f} | loss {:5.2f} | ppl {:8.2f}'.format(
-        epoch_i, batch_i, n_batches, (elapsed * 1000) / batch_i, cur_loss, ppl))
+    str_metrics = "| ".join(["{}: {:.3f}".format(k, v) for k, v in metrics.items()])
+    print('| Epoch: #{:<3} | {:>3}/{:} batches | {:.2f} ms/batch || {}'.format(
+        epoch_i, batch_i, n_batches, elapsed / batch_i, str_metrics))
 
     # Tensorboard
     if tb_writer:
-        tb_writer.add_scalar(f'{prefix}_Loss/batch', cur_loss, total_minibatches)
-        tb_writer.add_scalar(f'{prefix}_PPL/batch', ppl, total_minibatches)
+        for k, v in metrics.items():
+            tb_writer.add_scalar(f'{prefix}_{k.lower()}', v, total_minibatches)
+
+    return metrics
 
 
-def evaluate(model, test_iter, criterion, epoch_i=None, tb_writer=None, tb_batch_rate=None):
-    model.eval()
-    epoch_loss = 0
+def get_translations(outputs, src, trg, src_tok, trg_tok):
+    src_vocab, trg_vocab = src_tok.get_vocab_size(), trg_tok.get_vocab_size()
+    trg_pred = torch.argmax(outputs.view(outputs.shape[0], -1, trg_vocab), dim=2)  # B, L, E
 
-    # with torch.no_grad():
-    #     for i, batch in tqdm(enumerate(test_iter), total=len(test_iter)):
-    #
-    #
-    #         ##############################
-    #
-    #         ##############################
-    #
-    #         # Compute loss and backward => CE(I(N, C), T(N))
-    #         loss = criterion(output, trg)
-    #
-    #         epoch_loss += loss.item()
-    #
-    #         # Tensorboard
-    #         if tb_writer and i % tb_batch_rate == 0:
-    #             bn_iter = (n_iter - 1) * len(test_iter) + (i + 1)
-    #             b_loss = epoch_loss / (i + 1)
-    #             tb_writer.add_scalar('Loss/batch', b_loss, bn_iter)
-    #             tb_writer.add_scalar('PPL/batch', math.exp(b_loss), bn_iter)
-
-    return epoch_loss / len(test_iter)
-
-
-def summary_report(train_loss=None, test_loss=None, start_time=None, tr_writer=None, val_writer=None, n_iter=0, testing=False):
-    # Print summary
-    if start_time:
-        end_time = time.time()
-        epoch_mins, epoch_secs = utils.epoch_time(start_time, end_time)
-        print(f'Epoch: {n_iter:02} | Time: {epoch_mins}m {epoch_secs}s')
-    else:
-        print(f"Summary report:")
-
-    # Metrics
-    if train_loss is not None:
-        # Metrics
-        train_ppl = math.exp(train_loss)
-
-        # Tensorboard
-        if tr_writer:
-            tr_writer.add_scalar('Loss', train_loss, n_iter)
-            tr_writer.add_scalar('PPL', train_ppl, n_iter)
-
-    # Validation
-    if test_loss is not None:
-        test_type = "Test" if testing else "Val."
-
-        # Metrics
-        test_ppl = math.exp(test_loss)
-        print(f'\t {test_type} Loss: {test_loss:.3f} |  {test_type} PPL: {test_ppl:7.3f}')
-
-        # Tensorboard
-        if val_writer:
-            val_writer.add_scalar('Loss', test_loss, n_iter)
-            val_writer.add_scalar('PPL', test_ppl, n_iter)
+    # Decode tensors
+    src_dec = src_tok.decode(src)
+    ref_dec = trg_tok.decode(trg)
+    hyp_dec = trg_tok.decode(trg_pred)
+    return src_dec, ref_dec, hyp_dec
 
 
 if __name__ == "__main__":
@@ -237,6 +264,10 @@ if __name__ == "__main__":
         domain, (src, trg) = utils.get_dataset_ids(dataset)
         fname_base = f"{domain}_{src}-{trg}"
         print(f"Training model ({fname_base})...")
+
+        # Create paths
+        Path(os.path.join(dataset, DATASET_LOGS_NAME)).mkdir(parents=True, exist_ok=True)
+        Path(os.path.join(dataset, DATASET_CHECKPOINT_NAME)).mkdir(parents=True, exist_ok=True)
 
         # Train model
         run_experiment(dataset, src, trg, model_name=MODEL_NAME, bpe_folder=BPE_FOLDER, domain=domain)

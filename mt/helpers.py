@@ -114,8 +114,8 @@ def print_translations(hypothesis, references, source=None, limit=None):
         print(f"Translation #{i+1}: ")
         if src:
             print("\t- Src: " + src)
-        print("\t- Hyp: " + hyp)
         print("\t- Ref: " + ref)
+        print("\t- Hyp: " + hyp)
 
         # Set limit
         if limit and i+1 >= limit:

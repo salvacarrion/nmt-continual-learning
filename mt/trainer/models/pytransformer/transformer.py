@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 from torch.nn import TransformerEncoder
 import torch.nn.functional as F
+from einops import rearrange
 
 from mt import helpers
 
@@ -16,14 +17,14 @@ class TransformerModel(nn.Module):
         self.model_type = 'Transformer'
         self.d_model = d_model
 
+        self.pos_enc = PositionalEncoding(d_model=d_model, dropout=dropout)
+
         # Enc emb
         self.src_tok = src_tok
-        self.src_pos_enc = PositionalEncoding(d_model=d_model, dropout=dropout, max_len=self.src_tok.max_length)
         self.src_tok_embedding = nn.Embedding(self.src_tok.get_vocab_size(), d_model)
 
         # Dec emb
         self.trg_tok = trg_tok
-        self.trg_pos_enc = PositionalEncoding(d_model=d_model, dropout=dropout, max_len=self.trg_tok.max_length)
         self.trg_tok_embedding = nn.Embedding(self.trg_tok.get_vocab_size(), d_model)
 
         # Core
@@ -31,58 +32,43 @@ class TransformerModel(nn.Module):
                                                 num_encoder_layers=num_encoder_layers,
                                                 num_decoder_layers=num_decoder_layers,
                                                 dim_feedforward=dim_feedforward, dropout=dropout)
-        self.trg_decoder = nn.Linear(d_model, self.trg_tok.get_vocab_size())
+        self.fc = nn.Linear(d_model, self.trg_tok.get_vocab_size())
 
-    def forward(self, src, src_mask, trg, trg_mask):
+        self.init_weights()
+
+    def forward(self, src, trg, src_key_padding_mask, trg_key_padding_mask, memory_key_padding_mask, trg_mask):
         # # For debugging
         # source = self.src_tok.decode(src)
         # reference = self.trg_tok.decode(trg)
         # helpers.print_translations(source, reference)
 
-        # Process source
-        src = self.src_tok_embedding(src) * math.sqrt(self.d_model)
-        src = self.src_pos_enc(src)
-        # src_mask = self._make_src_mask(src_mask)
-        src_mask = ~src_mask.type(torch.bool)
+        # Reverse the shape of the batches from (num_sentences, num_tokens_in_each_sentence)
+        src = rearrange(src, 'n s -> s n')
+        trg = rearrange(trg, 'n t -> t n')
 
-        # Process target
-        trg = self.trg_tok_embedding(trg) * math.sqrt(self.d_model)
-        trg = self.trg_pos_enc(trg)
-        # trg_mask = self._make_trg_mask(trg_mask)
-        trg_mask = ~trg_mask.type(torch.bool)
-
-        # (B, L, E) => (L, B, E)
-        src = src.permute(1, 0, 2)
-        trg = trg.permute(1, 0, 2)
+        # Process src/trg
+        src = self.pos_enc(self.src_tok_embedding(src) * math.sqrt(self.d_model))
+        trg = self.pos_enc(self.trg_tok_embedding(trg) * math.sqrt(self.d_model))
 
         # Get output
-        output = self.transformer_model(src, trg, src_key_padding_mask=src_mask, tgt_key_padding_mask=trg_mask)
-        output = self.trg_decoder(output)
-        output = F.softmax(output, dim=-1)
-        return output
+        output = self.transformer_model(src, trg, tgt_mask=trg_mask, src_key_padding_mask=src_key_padding_mask,
+                                        tgt_key_padding_mask=trg_key_padding_mask, memory_key_padding_mask=memory_key_padding_mask)
+        # Rearrange to batch-first
+        output = rearrange(output, 't n e -> n t e')
 
-    def _make_src_mask(self, src_mask):
-        # Extend dimensions
-        src_mask = src_mask.unsqueeze(1).unsqueeze(2)  # (B, n_heads=1, seq_len=1, seq_len)
-        return src_mask
+        # Run the output through an fc layer to return values for each token in the vocab
+        return self.fc(output)
 
-    def _make_trg_mask(self, trg_mask):
-        # Extend dimensions
-        trg_mask = trg_mask.unsqueeze(1).unsqueeze(2)  # (B, n_heads=1, seq_len=1, seq_len)
-
-        # Diagonal matrix to hide next token (LxL)
-        trg_len = trg_mask.shape[3]  # target (max) length
-        trg_tri_mask = torch.tril(torch.ones((trg_len, trg_len), device=trg_mask.device)).bool()
-
-        # Add pads to the diagonal matrix (LxL)&Pad
-        # This is automatically broadcast (B, 1, 1, L) & (L, L) => (B, 1, L, L)
-        trg_mask = trg_mask & trg_tri_mask
-        return trg_mask
+    def init_weights(self):
+        # Use Xavier normal initialization in the transformer
+        for p in self.parameters():
+            if p.dim() > 1:
+                nn.init.xavier_normal_(p)
 
 
 class PositionalEncoding(nn.Module):
 
-    def __init__(self, d_model, dropout=0.1, max_len=5000):
+    def __init__(self, d_model, dropout=0.1, max_len=2000):
         super(PositionalEncoding, self).__init__()
         self.dropout = nn.Dropout(p=dropout)
 
@@ -95,5 +81,6 @@ class PositionalEncoding(nn.Module):
         self.register_buffer('pe', pe)
 
     def forward(self, x):
+        # [sequence length, batch size, embed dim]
         x = x + self.pe[:x.size(0), :]
         return self.dropout(x)

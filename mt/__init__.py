@@ -16,7 +16,6 @@ else:
 BASE_PATH = os.path.join(ROOT_PATH, "constrained")  # Main folder
 RAW_PATH = os.path.join(BASE_PATH, "raw")
 DATASETS_PATH = os.path.join(BASE_PATH, "datasets")
-LOGS_PATH = os.path.join(BASE_PATH, "logs")
 
 # Subfolders (one per dataset)
 DATASET_RAW_NAME = "raw"
@@ -25,4 +24,6 @@ DATASET_CLEAN_NAME = "clean"
 DATASET_BPE_NAME = f"bpe.{VOCAB_SIZE}"
 DATASET_TOK_NAME = "tok"
 DATASET_EVAL_NAME = "eval"
+DATASET_LOGS_NAME = "logs"
+DATASET_CHECKPOINT_NAME = "checkpoints"
 

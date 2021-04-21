@@ -25,3 +25,6 @@ jupyter==1.0.0
 
 
 fastBPE==0.1.0
+
+einops
+torchtext
