@@ -31,8 +31,9 @@ MAX_EPOCHS = 50
 LEARNING_RATE = 1e-3
 WARMUP_UPDATES = 4000
 PATIENCE = 10
-ACC_GRADIENTS = 1
+ACC_GRADIENTS = 8
 WEIGHT_DECAY = 0.0001
+MULTIGPU = False
 DEVICE1 = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 DEVICE2 = None  #torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -55,7 +56,7 @@ torch.backends.cudnn.benchmark = False
 ###########################################################################
 
 
-def run_experiment(datapath, src, trg, model_name, bpe_folder, domain=None, batch_size=32//2, max_tokens=4096//2, num_workers=0):
+def run_experiment(datapath, src, trg, model_name, bpe_folder, domain=None, batch_size=32, max_tokens=4096, num_workers=0):
     checkpoint_path = os.path.join(datapath, DATASET_CHECKPOINT_NAME, f"{model_name}_{domain}_best.pt")
 
     # Load tokenizers
@@ -76,10 +77,11 @@ def run_experiment(datapath, src, trg, model_name, bpe_folder, domain=None, batc
     optimizer1 = ScheduledOptim(
         optim.Adam(model1.parameters(), betas=(0.9, 0.98), eps=1e-09, lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY),
         model1.d_model, WARMUP_UPDATES)
-    if torch.cuda.device_count() > 1:
+
+    if MULTIGPU and torch.cuda.device_count() > 1:
         print("Let's use", torch.cuda.device_count(), "GPUs!")
-        # dim = 0 [30, xxx] -> [10, ...], [10, ...], [10, ...] on 3 GPUs
         model1 = nn.DataParallel(model1)
+
     model1.to(DEVICE1)
 
     # Set loss (ignore when the target token is <pad>)
@@ -156,14 +158,15 @@ def train(model_opt1, model_opt2, data_loader, criterion, clip=1.0, log_interval
 
         # Get output
         output1 = model1(src1, tgt_inp, src_key_padding_mask, tgt_key_padding_mask[:, :-1], memory_key_padding_mask)
-        loss = criterion(rearrange(output1, 'b t v -> (b t) v'), rearrange(tgt_out, 'b o -> (b o)'))
 
         # Compute backward
+        loss = criterion(rearrange(output1, 'b t v -> (b t) v'), rearrange(tgt_out, 'b o -> (b o)'))
+        # loss /= ACC_GRADIENTS
         loss.backward()
         total_loss += loss.item()
 
         # Accumulate gradients
-        if (i+1) % ACC_GRADIENTS or (i+1) == len(data_loader):
+        if (i+1) % ACC_GRADIENTS == 0 or (i+1) == len(data_loader):
             # Clip params
             torch.nn.utils.clip_grad_norm_(model1.parameters(), clip)
 
