@@ -1,7 +1,7 @@
 import os
 
 # Constants
-VOCAB_SIZE = 32000
+VOCAB_SIZE = 16000
 
 # Main folders
 if os.getenv('LOCAL_GPU'):

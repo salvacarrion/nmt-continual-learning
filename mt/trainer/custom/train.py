@@ -25,7 +25,7 @@ from mt.trainer.models.pytransformer.transformer import TransformerModel
 from mt.trainer.models.optim import  ScheduledOptim
 
 MODEL_NAME = "transformer"
-BPE_FOLDER = "bpe.32000"
+BPE_FOLDER = "bpe.16000"
 
 MAX_EPOCHS = 50
 LEARNING_RATE = 1e-3
@@ -33,7 +33,7 @@ WARMUP_UPDATES = 4000
 PATIENCE = 10
 ACC_GRADIENTS = 1
 WEIGHT_DECAY = 0.0001
-DEVICE1 = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+DEVICE1 = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 DEVICE2 = None  #torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 print(f"Device #1: {DEVICE1}")
@@ -72,10 +72,15 @@ def run_experiment(datapath, src, trg, model_name, bpe_folder, domain=None, batc
     # Instantiate model #1
     model1 = TransformerModel(src_tok=src_tok, trg_tok=trg_tok)
     # model1.load_state_dict(torch.load(checkpoint_path))
-    model1.to(DEVICE1)
+    # model1.to(DEVICE1)
     optimizer1 = ScheduledOptim(
         optim.Adam(model1.parameters(), betas=(0.9, 0.98), eps=1e-09, lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY),
         model1.d_model, WARMUP_UPDATES)
+    if torch.cuda.device_count() > 1:
+        print("Let's use", torch.cuda.device_count(), "GPUs!")
+        # dim = 0 [30, xxx] -> [10, ...], [10, ...], [10, ...] on 3 GPUs
+        model1 = nn.DataParallel(model1)
+    model1.to(DEVICE1)
 
     # Set loss (ignore when the target token is <pad>)
     criterion = nn.CrossEntropyLoss(ignore_index=trg_tok.word2idx[trg_tok.PAD_WORD])
@@ -123,22 +128,6 @@ def fit(model_opt1, model_opt2, train_loader, val_loader, epochs, criterion, che
                     break
 
 
-def gen_nopeek_mask(length):
-    """
-     Returns the nopeek mask
-             Parameters:
-                     length (int): Number of tokens in each sentence in the target batch
-             Returns:
-                     mask (arr): tgt_mask, looks like [[0., -inf, -inf],
-                                                      [0., 0., -inf],
-                                                      [0., 0., 0.]]
-     """
-    mask = rearrange(torch.triu(torch.ones(length, length)) == 1, 'h w -> w h')
-    mask = mask.float().masked_fill(mask == 0, float('-inf')).masked_fill(mask == 1, float(0.0))
-
-    return mask
-
-
 def train(model_opt1, model_opt2, data_loader, criterion, clip=1.0, log_interval=1, epoch_i=None, tb_writer=None):
     total_loss = 0.0
     all_metrics = []
@@ -164,10 +153,9 @@ def train(model_opt1, model_opt2, data_loader, criterion, clip=1.0, log_interval
 
         # Create tgt_inp and tgt_out (which is tgt_inp but shifted by 1)
         tgt_inp, tgt_out = trg1[:, :-1], trg1[:, 1:]
-        tgt_mask = gen_nopeek_mask(tgt_inp.shape[1]).to(DEVICE1)  # To not look tokens ahead
 
         # Get output
-        output1 = model1(src1, tgt_inp, src_key_padding_mask, tgt_key_padding_mask[:, :-1], memory_key_padding_mask, tgt_mask)
+        output1 = model1(src1, tgt_inp, src_key_padding_mask, tgt_key_padding_mask[:, :-1], memory_key_padding_mask)
         loss = criterion(rearrange(output1, 'b t v -> (b t) v'), rearrange(tgt_out, 'b o -> (b o)'))
 
         # Compute backward
@@ -211,10 +199,10 @@ def evaluate(model, data_loader, criterion, log_interval=1, epoch_i=None, tb_wri
 
             # Create tgt_inp and tgt_out (which is tgt_inp but shifted by 1)
             tgt_inp, tgt_out = trg[:, :-1], trg[:, 1:]
-            tgt_mask = gen_nopeek_mask(tgt_inp.shape[1]).to(DEVICE1)
+            #tgt_mask = gen_nopeek_mask(tgt_inp.shape[1]).to(DEVICE1)
 
             # Get output
-            outputs = model(src, tgt_inp, src_key_padding_mask, tgt_key_padding_mask[:, :-1], memory_key_padding_mask, tgt_mask)
+            outputs = model(src, tgt_inp, src_key_padding_mask, tgt_key_padding_mask[:, :-1], memory_key_padding_mask)
             loss = criterion(rearrange(outputs, 'b t v -> (b t) v'), rearrange(tgt_out, 'b o -> (b o)'))
 
             total_loss += loss.item()

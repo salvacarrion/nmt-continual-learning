@@ -36,11 +36,13 @@ class TransformerModel(nn.Module):
 
         self.init_weights()
 
-    def forward(self, src, trg, src_key_padding_mask, trg_key_padding_mask, memory_key_padding_mask, trg_mask):
+    def forward(self, src, trg, src_key_padding_mask, trg_key_padding_mask, memory_key_padding_mask):
         # # For debugging
         # source = self.src_tok.decode(src)
         # reference = self.trg_tok.decode(trg)
         # helpers.print_translations(source, reference)
+
+        trg_mask = self.gen_nopeek_mask(trg.shape[1]).to(src.device)  # To not look tokens ahead
 
         # Reverse the shape of the batches from (num_sentences, num_tokens_in_each_sentence)
         src = rearrange(src, 'n s -> s n')
@@ -64,6 +66,22 @@ class TransformerModel(nn.Module):
         for p in self.parameters():
             if p.dim() > 1:
                 nn.init.xavier_normal_(p)
+
+
+    def gen_nopeek_mask(self, length):
+        """
+         Returns the nopeek mask
+                 Parameters:
+                         length (int): Number of tokens in each sentence in the target batch
+                 Returns:
+                         mask (arr): tgt_mask, looks like [[0., -inf, -inf],
+                                                          [0., 0., -inf],
+                                                          [0., 0., 0.]]
+         """
+        mask = rearrange(torch.triu(torch.ones(length, length)) == 1, 'h w -> w h')
+        mask = mask.float().masked_fill(mask == 0, float('-inf')).masked_fill(mask == 1, float(0.0))
+
+        return mask
 
 
 class PositionalEncoding(nn.Module):
