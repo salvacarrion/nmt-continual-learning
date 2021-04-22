@@ -1,3 +1,4 @@
+import json
 import os
 import numpy as np
 import random
@@ -21,7 +22,7 @@ from tqdm import tqdm
 
 from mt.preprocess import utils
 from mt import helpers
-from mt import DATASETS_PATH, DATASET_LOGS_NAME, DATASET_CHECKPOINT_NAME
+from mt import DATASETS_PATH, DATASET_LOGS_NAME, DATASET_CHECKPOINT_NAME, DATASET_EVAL_NAME
 from mt.trainer.models.pytransformer.transformer import TransformerModel
 from mt.trainer.models.optim import  ScheduledOptim
 
@@ -77,15 +78,35 @@ def run_experiment(datapath, src, trg, model_name, bpe_folder, domain=None, num_
     model1.load_state_dict(torch.load(checkpoint_path))
     model1.to(DEVICE1)
 
-    evaluate(model1, test_loader, print_translations=True)
+    # Evaluate model
+    metrics, translations = evaluate(model1, test_loader, print_translations=True)
+    src_dec_all, ref_dec_all, hyp_dec_all = translations
+    print(metrics)
 
+    # Create path
+    eval_name = domain
+    eval_path = os.path.join(datapath, DATASET_EVAL_NAME, eval_name)
+    Path(eval_path).mkdir(parents=True, exist_ok=True)
+
+    # Save translations to file
+    with open(os.path.join(eval_path, 'src.txt'), 'w') as f:
+        f.writelines("%s\n" % s for s in src_dec_all)
+    with open(os.path.join(eval_path, 'hyp.txt'), 'w') as f:
+        f.writelines("%s\n" % s for s in hyp_dec_all)
+    with open(os.path.join(eval_path, 'ref.txt'), 'w') as f:
+        f.writelines("%s\n" % s for s in ref_dec_all)
+    print("Translations written!")
+
+    # Save metrics to file
+    with open(os.path.join(eval_path, 'metrics.json'), 'w') as f:
+        json.dump(metrics, f)
+    print("Metrics saved!")
+
+    print("To get BLEU use: 'cat hyp.txt | sacrebleu ref.txt'")
     print("Done!")
 
 
 def evaluate(model, data_loader, print_translations=True):
-    total_loss = 0.0
-    all_metrics = []
-    start_time = time.time()
     src_dec_all, ref_dec_all, hyp_dec_all = [], [], []
 
     model.eval()
@@ -93,16 +114,7 @@ def evaluate(model, data_loader, print_translations=True):
         with torch.no_grad():
             # Get batch data
             src, src_mask, trg, trg_mask = [x.to(DEVICE1) for x in batch]
-            src_vocab1, trg_vocab1 = model.src_tok.get_vocab_size(), model.trg_tok.get_vocab_size()
-            batch_size, src_max_len, trg_max_len = src.shape[0], src.shape[1], trg.shape[1]
-
             src_key_padding_mask = ~src_mask.type(torch.bool).to(DEVICE1)
-            tgt_key_padding_mask = ~trg_mask.type(torch.bool).to(DEVICE1)
-            memory_key_padding_mask = src_key_padding_mask.clone()
-
-            # Create tgt_inp and tgt_out (which is tgt_inp but shifted by 1)
-            tgt_inp, tgt_out = trg[:, :-1], trg[:, 1:]
-            #tgt_mask = gen_nopeek_mask(tgt_inp.shape[1]).to(DEVICE1)
 
             # Get output
             outputs = model.translate_batch(src, src_key_padding_mask, max_length=100, beam_width=1)
@@ -110,16 +122,22 @@ def evaluate(model, data_loader, print_translations=True):
             # Get translations
             trg_pred = [x[0][0] for x in outputs]  # Get best
             src_dec, ref_dec, hyp_dec = get_translations(src, trg, trg_pred, model.src_tok, model.trg_tok)
-            if print_translations:
-                src_dec_all += src_dec
-                ref_dec_all += ref_dec
-                hyp_dec_all += hyp_dec
+            src_dec_all += src_dec
+            ref_dec_all += ref_dec
+            hyp_dec_all += hyp_dec
+            break
 
     # Print translations
     if print_translations:
-        helpers.print_translations(hypothesis=hyp_dec_all, references=ref_dec_all, source=src_dec_all, limit=50)
+        helpers.print_translations(hypothesis=hyp_dec_all, references=ref_dec_all, source=src_dec_all, limit=None)
 
-    return total_loss / len(data_loader), all_metrics
+    # Compute metrics
+    metrics = {}
+    torch_bleu = torchtext.data.metrics.bleu_score([x.split(" ") for x in hyp_dec_all],
+                                                   [[x.split(" ")] for x in ref_dec_all])
+    metrics["torch_bleu"] = torch_bleu
+
+    return metrics, (src_dec_all, ref_dec_all, hyp_dec_all)
 
 
 def log_progress(prefix, total_loss, epoch_i, batch_i, n_batches, start_time, tb_writer=None, translations=None):
