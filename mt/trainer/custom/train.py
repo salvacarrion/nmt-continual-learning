@@ -31,9 +31,11 @@ BPE_FOLDER = "bpe.16000"
 
 MAX_EPOCHS = 50
 LEARNING_RATE = 1e-3
+BATCH_SIZE = int(32*1.5)
+MAX_TOKENS = int(4096*1.5)
 WARMUP_UPDATES = 4000
 PATIENCE = 10
-ACC_GRADIENTS = 1
+ACC_GRADIENTS = 8
 WEIGHT_DECAY = 0.0001
 MULTIGPU = False
 DEVICE1 = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -59,8 +61,10 @@ torch.backends.cudnn.benchmark = False
 
 wandb.init(project='nmt', entity='salvacarrion')
 config = wandb.config
-config.max_epochs = MAX_EPOCHS
+config.bpe_folder = BPE_FOLDER
 config.learning_rate = LEARNING_RATE
+config.batch_size = BATCH_SIZE
+config.max_epochs = MAX_EPOCHS
 config.warmup_updates = WARMUP_UPDATES
 config.patience = PATIENCE
 config.acc_gradients = ACC_GRADIENTS
@@ -72,7 +76,8 @@ config.device2 = str(DEVICE2)
 ###########################################################################
 ###########################################################################
 
-def run_experiment(datapath, src, trg, model_name, bpe_folder, domain=None, batch_size=32, max_tokens=4096, num_workers=0):
+
+def run_experiment(datapath, src, trg, model_name, bpe_folder, domain=None, num_workers=0):
     checkpoint_path = os.path.join(datapath, DATASET_CHECKPOINT_NAME, f"{model_name}_{domain}_best.pt")
 
     # Load tokenizers
@@ -82,8 +87,8 @@ def run_experiment(datapath, src, trg, model_name, bpe_folder, domain=None, batc
     datasets = helpers.load_dataset(os.path.join(datapath, bpe_folder), src, trg, splits=["train", "val", "test"])
 
     # Prepare data loaders
-    train_loader = helpers.build_dataloader(datasets["train"], src_tok, trg_tok, batch_size=batch_size, max_tokens=max_tokens, num_workers=num_workers)
-    val_loader = helpers.build_dataloader(datasets["val"], src_tok, trg_tok, batch_size=batch_size, max_tokens=max_tokens, num_workers=num_workers, shuffle=False)
+    train_loader = helpers.build_dataloader(datasets["train"], src_tok, trg_tok, batch_size=BATCH_SIZE, max_tokens=MAX_TOKENS, num_workers=num_workers)
+    val_loader = helpers.build_dataloader(datasets["val"], src_tok, trg_tok, batch_size=BATCH_SIZE, max_tokens=MAX_TOKENS, num_workers=num_workers, shuffle=False)
     # test_loader = helpers.build_dataloader(datasets["test"], src_tok, trg_tok, batch_size=batch_size, max_tokens=max_tokens, num_workers=num_workers, shuffle=False)
 
     # Instantiate model #1
@@ -99,6 +104,7 @@ def run_experiment(datapath, src, trg, model_name, bpe_folder, domain=None, batc
         model1 = nn.DataParallel(model1)
 
     model1.to(DEVICE1)
+    wandb.watch(model1)
 
     # Set loss (ignore when the target token is <pad>)
     criterion = nn.CrossEntropyLoss(ignore_index=trg_tok.word2idx[trg_tok.PAD_WORD])
@@ -177,7 +183,7 @@ def train(model_opt1, model_opt2, data_loader, criterion, clip=1.0, log_interval
 
         # Compute backward
         loss = criterion(rearrange(output1, 'b t v -> (b t) v'), rearrange(tgt_out, 'b o -> (b o)'))
-        # loss /= ACC_GRADIENTS
+        loss /= ACC_GRADIENTS
         loss.backward()
         total_loss += loss.item()
 

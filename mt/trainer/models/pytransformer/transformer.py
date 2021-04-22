@@ -67,7 +67,6 @@ class TransformerModel(nn.Module):
             if p.dim() > 1:
                 nn.init.xavier_normal_(p)
 
-
     def gen_nopeek_mask(self, length):
         """
          Returns the nopeek mask
@@ -82,6 +81,83 @@ class TransformerModel(nn.Module):
         mask = mask.float().masked_fill(mask == 0, float('-inf')).masked_fill(mask == 1, float(0.0))
 
         return mask
+
+    def decode_word(self, memory, memory_key_padding_mask, trg_indexes):
+        # Get predicted words (all)
+        trg = torch.tensor(trg_indexes, dtype=torch.int, device=memory.device).unsqueeze(0)  # (1, 1->L)
+        trg_mask = self.gen_nopeek_mask(trg.shape[1]).to(memory.device)  # To not look tokens ahead
+        tgt_key_padding_mask = torch.zeros(trg.shape, device=trg.device).bool()
+
+        with torch.no_grad():
+            # Reverse the shape of the batches from (num_sentences, num_tokens_in_each_sentence)
+            trg = rearrange(trg, 'n t -> t n')
+
+            # Process src/trg
+            trg = self.pos_enc(self.trg_tok_embedding(trg) * math.sqrt(self.d_model))
+
+            # Get next word probabilities (the decoder returns one output per target-input)
+            output = self.transformer_model.decoder(tgt=trg, memory=memory,
+                                                    tgt_mask=trg_mask, memory_mask=None,
+                                                    tgt_key_padding_mask=tgt_key_padding_mask, memory_key_padding_mask=memory_key_padding_mask)
+            # Rearrange to batch-first
+            output = rearrange(output, 't n e -> n t e')
+
+            # Run the output through an fc layer to return values for each token in the vocab
+            output = self.fc(output)
+        return output
+
+    def translate_batch(self, src, src_key_padding_mask, max_length=100, beam_width=1):
+        sos_idx = self.trg_tok.word2idx[self.trg_tok.SOS_WORD]
+        eos_idx = self.trg_tok.word2idx[self.trg_tok.EOS_WORD]
+
+        # Run encoder
+        with torch.no_grad():
+            # Reverse the shape of the batches from (num_sentences, num_tokens_in_each_sentence)
+            src = rearrange(src, 'n s -> s n')
+            # Process src/trg
+            src = self.pos_enc(self.src_tok_embedding(src) * math.sqrt(self.d_model))
+            memory = self.transformer_model.encoder(src, mask=None, src_key_padding_mask=src_key_padding_mask)
+
+        # Set fist word (<sos>)
+        batch_size = src.size(1)
+        final_candidates = []
+        for i in range(batch_size):  # Samples to translate
+            candidates = [([sos_idx], 0.0)]  # (ids, probability (unnormalized))
+
+            while True:
+                # Expand each candidate
+                tmp_candidates = []
+                modified = False
+                for idxs, score in candidates:
+                    # Check if the EOS has been reached, or the maximum length exceeded
+                    if idxs[-1] == eos_idx or len(idxs) >= max_length:
+                        continue
+                    else:
+                        modified = True
+
+                    # Get next word probabilities (the decoder returns one output per target-input)
+                    next_logits = self.decode_word(memory=memory[:, i, :].unsqueeze(1),
+                                                     memory_key_padding_mask=src_key_padding_mask[i].unsqueeze(0),
+                                                     trg_indexes=idxs)
+                    next_logits = next_logits.squeeze(0)[-1]  # Ignore batch (Batch always 1); and get last word
+
+                    # Get top k indexes (by score) to reduce the memory consumption
+                    new_scores = score + F.log_softmax(next_logits, dim=-1)  # Previous score + new
+                    top_idxs_i = torch.argsort(new_scores, descending=True)[:beam_width]  # tmp
+
+                    # Add new candidates
+                    new_candidates = [(idxs + [int(idx)], float(new_scores[int(idx)])) for idx in top_idxs_i]
+                    tmp_candidates += new_candidates
+
+                # Check if there has been any change
+                if modified:
+                    # Normalize probabilities, sort in descending order and select top k
+                    candidates = sorted(tmp_candidates, key=lambda x: x[1]/len(x[0]), reverse=True)
+                    candidates = candidates[:beam_width]
+                else:
+                    final_candidates.append(candidates)
+                    break
+        return final_candidates
 
 
 class PositionalEncoding(nn.Module):
