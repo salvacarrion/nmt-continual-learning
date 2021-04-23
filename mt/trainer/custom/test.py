@@ -27,7 +27,7 @@ from mt.trainer.models.pytransformer.transformer import TransformerModel
 from mt.trainer.models.optim import  ScheduledOptim
 
 MODEL_NAME = "transformer"
-BPE_FOLDER = "bpe.16000"
+tok_folder = "bpe.16000"
 
 
 MAX_EPOCHS = 50
@@ -61,14 +61,14 @@ torch.backends.cudnn.benchmark = False
 ###########################################################################
 
 
-def run_experiment(datapath, src, trg, model_name, bpe_folder, domain=None, num_workers=0):
+def run_experiment(datapath, src, trg, model_name, tok_folder, domain=None, num_workers=0):
     checkpoint_path = os.path.join(datapath, DATASET_CHECKPOINT_NAME, f"{model_name}_{domain}_best.pt")
 
     # Load tokenizers
-    src_tok, trg_tok = helpers.get_tokenizers(os.path.join(datapath, bpe_folder), src, trg, use_fastbpe=True)  # use_fastbpe != apply_fastbpe
+    src_tok, trg_tok = helpers.get_tokenizers(os.path.join(datapath, tok_folder), src, trg, use_fastbpe=True)  # use_fastbpe != apply_fastbpe
 
     # Load dataset
-    datasets = helpers.load_dataset(os.path.join(datapath, bpe_folder), src, trg, splits=["test"])
+    datasets = helpers.load_dataset(os.path.join(datapath, tok_folder), src, trg, splits=["test"])
 
     # Prepare data loaders
     test_loader = helpers.build_dataloader(datasets["test"], src_tok, trg_tok, batch_size=BATCH_SIZE, max_tokens=MAX_TOKENS, num_workers=num_workers, shuffle=False)
@@ -203,4 +203,4 @@ if __name__ == "__main__":
         Path(os.path.join(dataset, DATASET_CHECKPOINT_NAME)).mkdir(parents=True, exist_ok=True)
 
         # Train model
-        run_experiment(dataset, src, trg, model_name=MODEL_NAME, bpe_folder=BPE_FOLDER, domain=domain)
+        run_experiment(dataset, src, trg, model_name=MODEL_NAME, tok_folder=tok_folder, domain=domain)

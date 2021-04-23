@@ -18,12 +18,12 @@ def init_weights(m):
 
 class LitTransformer(pl.LightningModule):
 
-    def __init__(self, lt_src, lt_trg):
+    def __init__(self, src_tok, trg_tok):
         super().__init__()
 
         # Save tokenizers
-        self.src_tok = lt_src
-        self.trg_tok = lt_trg
+        self.src_tok = src_tok
+        self.trg_tok = trg_tok
         self.show_translations = False
         self.batch_size = 32
         self.learning_rate = 1e-4
@@ -36,7 +36,7 @@ class LitTransformer(pl.LightningModule):
         self.model.apply(init_weights)
 
         # Set loss (ignore when the target token is <pad>)
-        self.pad_idx = self.trg_tok.word2idx[lt_trg.PAD_WORD]
+        self.pad_idx = self.trg_tok.word2idx[trg_tok.PAD_WORD]
         self.criterion = nn.CrossEntropyLoss(ignore_index=self.pad_idx)
 
     def forward(self, x):

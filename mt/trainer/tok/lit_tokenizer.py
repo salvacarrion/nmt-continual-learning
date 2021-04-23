@@ -13,10 +13,10 @@ from tokenizers.decoders import WordPiece as tok_decoder
 from tokenizers.processors import TemplateProcessing
 
 
-def encode(examples, tok_src, tok_trg):
+def encode(examples, src_tok, trg_tok):
     # Encode strings
-    _src_tokenized = tok_src.tokenizer.encode_batch(examples['src'])
-    _trg_tokenized = tok_trg.tokenizer.encode_batch(examples['trg'])
+    _src_tokenized = src_tok.tokenizer.encode_batch(examples['src'])
+    _trg_tokenized = trg_tok.tokenizer.encode_batch(examples['trg'])
 
     # Remove other params (there are problems with PyArrow)
     src_tokenized = [{'ids': x.ids, 'attention_mask': x.attention_mask} for x in _src_tokenized]
@@ -30,14 +30,14 @@ def encode(examples, tok_src, tok_trg):
     return new_examples
 
 
-def collate_fn(examples, tok_src, tok_trg, max_tokens):
+def collate_fn(examples, src_tok, trg_tok, max_tokens):
     # Decompose examples
     _src = [x['src'] for x in examples]
     _trg = [x['trg'] for x in examples]
 
     # Processed examples
-    src = tok_src.pad(_src, keys=['ids', 'attention_mask'])
-    trg = tok_trg.pad(_trg, keys=['ids', 'attention_mask'])
+    src = src_tok.pad(_src, keys=['ids', 'attention_mask'])
+    trg = trg_tok.pad(_trg, keys=['ids', 'attention_mask'])
 
     # Limit tokens
     batch_size, max_len = len(src['ids']), len(src['ids'][0])

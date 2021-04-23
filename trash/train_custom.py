@@ -31,15 +31,15 @@ torch.backends.cudnn.benchmark = False
 # Use zero workers when debugging to avoid freezing
 def train_model(datapath, src, trg, model_name, bpe_folder, domain=None, batch_size=32, max_tokens=4096, num_workers=0):
     # Load tokenizers
-    lt_src, lt_trg = helpers.get_tokenizers(os.path.join(datapath, bpe_folder), src, trg, use_fastbpe=True)  # use_fastbpe != apply_fastbpe
+    src_tok, trg_tok = helpers.get_tokenizers(os.path.join(datapath, bpe_folder), src, trg, use_fastbpe=True)  # use_fastbpe != apply_fastbpe
 
     # Load dataset
     datasets = helpers.load_dataset(os.path.join(datapath, bpe_folder), src, trg, splits=["train", "val", "test"])
 
     # Prepare data loaders
-    train_loader = helpers.build_dataloader(datasets["val"], lt_src, lt_trg, batch_size=batch_size, max_tokens=max_tokens, num_workers=num_workers)
-    val_loader = helpers.build_dataloader(datasets["val"], lt_src, lt_trg, batch_size=batch_size, max_tokens=max_tokens, num_workers=num_workers, shuffle=False)
-    # test_loader = helpers.build_dataloader(datasets["test"], lt_src, lt_trg, batch_size=batch_size, max_tokens=max_tokens, num_workers=num_workers, shuffle=False)
+    train_loader = helpers.build_dataloader(datasets["val"], src_tok, trg_tok, batch_size=batch_size, max_tokens=max_tokens, num_workers=num_workers)
+    val_loader = helpers.build_dataloader(datasets["val"], src_tok, trg_tok, batch_size=batch_size, max_tokens=max_tokens, num_workers=num_workers, shuffle=False)
+    # test_loader = helpers.build_dataloader(datasets["test"], src_tok, trg_tok, batch_size=batch_size, max_tokens=max_tokens, num_workers=num_workers, shuffle=False)
 
     # Instantiate model
     hid_dim = 256
@@ -51,10 +51,10 @@ def train_model(datapath, src, trg, model_name, bpe_folder, domain=None, batch_s
     dec_pf_dim = 512
     enc_dropout = 0.1
     dec_dropout = 0.1
-    src_vocab, trg_vocab = lt_src.get_vocab_size(), lt_trg.get_vocab_size()
-    enc = Encoder(src_vocab, hid_dim, enc_layers, enc_heads, enc_pf_dim, enc_dropout, lt_src.max_length)
-    dec = Decoder(trg_vocab, hid_dim, dec_layers, dec_heads, dec_pf_dim, dec_dropout, lt_trg.max_length)
-    model = Seq2Seq(enc, dec, lt_src, lt_trg)
+    src_vocab, trg_vocab = src_tok.get_vocab_size(), trg_tok.get_vocab_size()
+    enc = Encoder(src_vocab, hid_dim, enc_layers, enc_heads, enc_pf_dim, enc_dropout, src_tok.max_length)
+    dec = Decoder(trg_vocab, hid_dim, dec_layers, dec_heads, dec_pf_dim, dec_dropout, trg_tok.max_length)
+    model = Seq2Seq(enc, dec, src_tok, trg_tok)
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model.to(device)
@@ -63,7 +63,7 @@ def train_model(datapath, src, trg, model_name, bpe_folder, domain=None, batch_s
     model.apply(init_weights)
 
     # Set loss (ignore when the target token is <pad>)
-    pad_idx = lt_trg.word2idx[lt_trg.PAD_WORD]
+    pad_idx = trg_tok.word2idx[trg_tok.PAD_WORD]
     criterion = nn.CrossEntropyLoss(ignore_index=pad_idx)
 
     # Set optimizer
@@ -71,7 +71,7 @@ def train_model(datapath, src, trg, model_name, bpe_folder, domain=None, batch_s
 
     # Fit model
     for i in range(1, 50+1):
-        train_loss = train(model, train_loader, optimizer, criterion, device, clip=1.0, n_iter=i, src_tok=lt_src, trg_tok=lt_trg)
+        train_loss = train(model, train_loader, optimizer, criterion, device, clip=1.0, n_iter=i, src_tok=src_tok, trg_tok=trg_tok)
         print(f"Train loss: {train_loss}")
 
 

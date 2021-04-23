@@ -14,40 +14,40 @@ from mt.trainer.models.rnn.lit_rnn import LitRNN, init_weights
 
 
 MODEL_NAME = "transformer"
-BPE_FOLDER = "bpe.8000"
+tok_folder = "bpe.8000"
 
 np.random.seed(123)
 pl.seed_everything(123)
 
 
-def get_model(model_name, lt_src, lt_trg):
+def get_model(model_name, src_tok, trg_tok):
     print(f"=> Model chosen: '{model_name}'")
     if model_name == "rnn":
-        model = LitRNN(lt_src, lt_trg)
+        model = LitRNN(src_tok, trg_tok)
     elif model_name == "transformer":
-        model = LitTransformer(lt_src, lt_trg)
+        model = LitTransformer(src_tok, trg_tok)
     else:
         raise ValueError("Unknown model")
     return model
 
 
 # Use zero workers when debugging to avoid freezing
-def train_model(datapath, src, trg, model_name, bpe_folder, domain=None, batch_size=32//2, max_tokens=4096//2, num_workers=0):
+def train_model(datapath, src, trg, model_name, tok_folder, domain=None, batch_size=32//2, max_tokens=4096//2, num_workers=0):
     logger = TensorBoardLogger(LOGS_PATH, name=model_name)
 
     # Load tokenizers
-    lt_src, lt_trg = helpers.get_tokenizers(os.path.join(datapath, bpe_folder), src, trg, use_fastbpe=True)  # use_fastbpe != apply_fastbpe
+    src_tok, trg_tok = helpers.get_tokenizers(os.path.join(datapath, tok_folder), src, trg, use_fastbpe=True)  # use_fastbpe != apply_fastbpe
 
     # Load dataset
-    datasets = helpers.load_dataset(os.path.join(datapath, bpe_folder), src, trg, splits=["train", "val", "test"])
+    datasets = helpers.load_dataset(os.path.join(datapath, tok_folder), src, trg, splits=["train", "val", "test"])
 
     # Prepare data loaders
-    train_loader = helpers.build_dataloader(datasets["train"], lt_src, lt_trg, batch_size=batch_size, max_tokens=max_tokens, num_workers=num_workers)
-    #val_loader = helpers.build_dataloader(datasets["val"], lt_src, lt_trg, batch_size=batch_size, max_tokens=max_tokens, num_workers=num_workers, shuffle=False)
-    # test_loader = helpers.build_dataloader(datasets["test"], lt_src, lt_trg, batch_size=batch_size, max_tokens=max_tokens, num_workers=num_workers, shuffle=False)
+    train_loader = helpers.build_dataloader(datasets["train"], src_tok, trg_tok, batch_size=batch_size, max_tokens=max_tokens, num_workers=num_workers)
+    #val_loader = helpers.build_dataloader(datasets["val"], src_tok, trg_tok, batch_size=batch_size, max_tokens=max_tokens, num_workers=num_workers, shuffle=False)
+    # test_loader = helpers.build_dataloader(datasets["test"], src_tok, trg_tok, batch_size=batch_size, max_tokens=max_tokens, num_workers=num_workers, shuffle=False)
 
     # Instantiate model
-    litmodel = get_model(model_name, lt_src, lt_trg)
+    litmodel = get_model(model_name, src_tok, trg_tok)
     litmodel.show_translations = False
 
     # Callbacks
@@ -91,4 +91,4 @@ if __name__ == "__main__":
         print(f"Training model ({fname_base})...")
 
         # Train model
-        train_model(dataset, src, trg, model_name=MODEL_NAME, bpe_folder=BPE_FOLDER, domain=domain)
+        train_model(dataset, src, trg, model_name=MODEL_NAME, tok_folder=tok_folder, domain=domain)

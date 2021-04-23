@@ -5,20 +5,22 @@ VOCAB_SIZE=$1
 SRC_LANG=$2
 TRG_LANG=$3
 BASE_PATH=$4
-FASTBPE_PATH=$5
+SAVE_PATH=$5
+FASTBPE_PATH=$6
 
 # Fast BPE: https://github.com/glample/fastBPE
 
 # Show constants
-echo "Learning BPE... ****************"
+echo "Applying BPE... ****************"
 echo "- Source language: "$SRC_LANG
 echo "- Target language: "$TRG_LANG
 echo "- Base path: "$BASE_PATH
+echo "- Save path: "$SAVE_PATH
 
 # Create folder
-mkdir -p $BASE_PATH/bpe.$VOCAB_SIZE/
+mkdir -p $SAVE_PATH
 
 # Learn codes
-$FASTBPE_PATH learnbpe $VOCAB_SIZE $BASE_PATH/clean/train.$SRC_LANG > $BASE_PATH/bpe.$VOCAB_SIZE/codes.$SRC_LANG
-$FASTBPE_PATH learnbpe $VOCAB_SIZE $BASE_PATH/clean/train.$TRG_LANG > $BASE_PATH/bpe.$VOCAB_SIZE/codes.$TRG_LANG
+$FASTBPE_PATH learnbpe $VOCAB_SIZE $BASE_PATH/clean/train.$SRC_LANG > $SAVE_PATH/codes.$SRC_LANG
+$FASTBPE_PATH learnbpe $VOCAB_SIZE $BASE_PATH/clean/train.$TRG_LANG > $SAVE_PATH/codes.$TRG_LANG
 

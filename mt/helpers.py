@@ -6,52 +6,44 @@ from torch.utils.data import DataLoader
 
 from datasets import Dataset
 
+from trainer.tok.word_tokenizer import WordTokenizer
 from trainer.tok.lit_tokenizer import LitTokenizer
 from trainer.tok.fastbpe_tokenizer import FastBPETokenizer
 from tqdm import tqdm
 
 
-def get_tokenizers(datapath, src, trg, use_fastbpe):
+def get_tokenizers(datapath, src, trg, tok_model="fastbpe"):
     # Define Tokenizer
-    if use_fastbpe:
-        lt_src = FastBPETokenizer(padding=False, truncation=True, max_length=200, lang=src)
-        lt_trg = FastBPETokenizer(padding=False, truncation=True, max_length=200, lang=trg)
+    if tok_model == "fastbpe":
+        src_tok = FastBPETokenizer(padding=False, truncation=True, max_length=200, lang=src)
+        trg_tok = FastBPETokenizer(padding=False, truncation=True, max_length=200, lang=trg)
 
         # Load vocab
-        lt_src.load_vocab(os.path.join(datapath, f"codes.{src}"),
-                          os.path.join(datapath, f"vocab.{src}"))
-        lt_trg.load_vocab(os.path.join(datapath, f"codes.{trg}"),
-                          os.path.join(datapath, f"vocab.{trg}"))
-    else:
+        src_tok.load_vocab(os.path.join(datapath, f"codes.{src}"), os.path.join(datapath, f"vocab.{src}"))
+        trg_tok.load_vocab(os.path.join(datapath, f"codes.{trg}"), os.path.join(datapath, f"vocab.{trg}"))
+
+    elif tok_model == "wt":
         # Do not use padding here. Datasets are preprocessed before batching
-        lt_src = LitTokenizer(padding=False, truncation=False, max_length=5000, lang=src)
-        lt_trg = LitTokenizer(padding=False, truncation=False, max_length=5000, lang=trg)
+        src_tok = WordTokenizer(padding=False, truncation=False, max_length=5000, lang=src)
+        trg_tok = WordTokenizer(padding=False, truncation=False, max_length=5000, lang=trg)
 
         # Load vocab
-        lt_src.load_vocab(os.path.join(datapath, f"tok.{src}-vocab.json"),
-                          os.path.join(datapath, f"tok.{src}-merges.txt"))
-        lt_trg.load_vocab(os.path.join(datapath, f"tok.{trg}-vocab.json"),
-                          os.path.join(datapath, f"tok.{trg}-merges.txt"))
+        src_tok.load_vocab(os.path.join(datapath, f"tok.{src}-vocab.txt"))
+        trg_tok.load_vocab(os.path.join(datapath, f"tok.{trg}-vocab.txt"))
 
-    # # Sanity check
-    # text_src = "Hola mundo!"
-    # text_src_enc = lt_src.encode(text_src)
-    # text_src_dec = lt_src.decode(text_src_enc.ids)
-    # print(f"Source tokenizer")
-    # print(f"\tRaw text: {text_src}")
-    # print(f"\tEncoded text: {text_src_enc.tokens}")
-    # print(f"\tDecoded text: {text_src_dec}")
-    # print("")
-    #
-    # text_trg = "Hello world!"
-    # text_trg_enc = lt_trg.encode(text_trg)
-    # text_trg_dec = lt_trg.decode(text_trg_enc.ids)
-    # print(f"Target tokenizer")
-    # print(f"\tRaw text: {text_trg}")
-    # print(f"\tEncoded text: {text_trg_enc.tokens}")
-    # print(f"\tDecoded text: {text_trg_dec}")
-    # print("")
-    return lt_src, lt_trg
+    elif tok_model == "hft":
+        # Do not use padding here. Datasets are preprocessed before batching
+        src_tok = LitTokenizer(padding=False, truncation=False, max_length=5000, lang=src)
+        trg_tok = LitTokenizer(padding=False, truncation=False, max_length=5000, lang=trg)
+
+        # Load vocab
+        src_tok.load_vocab(os.path.join(datapath, f"tok.{src}-vocab.json"), os.path.join(datapath, f"tok.{src}-merges.txt"))
+        trg_tok.load_vocab(os.path.join(datapath, f"tok.{trg}-vocab.json"), os.path.join(datapath, f"tok.{trg}-merges.txt"))
+
+    else:
+        raise ValueError("Unknown tokenizer")
+
+    return src_tok, trg_tok
 
 
 def load_dataset(datapath, src, trg, splits=None):
@@ -85,23 +77,20 @@ def load_dataset(datapath, src, trg, splits=None):
     return datasets
 
 
-def build_dataloader(dataset, tok_src, tok_trg, apply_bpe=False, batch_size=1, max_tokens=4000, num_workers=0, shuffle=True):
-    from trainer.tok.fastbpe_tokenizer import encode, collate_fn
-    from trainer.tok import fastbpe_tokenizer
-
+def build_dataloader(dataset, src_tok, trg_tok, tokenizer_class, batch_size=1, max_tokens=4000, num_workers=0, shuffle=True):
     # Pre-process datasets (lazy), encode=static method
-    fastbpe_tokenizer.apply_bpe = apply_bpe
-    fastbpe_tokenizer.tok_src = tok_src
-    fastbpe_tokenizer.tok_trg = tok_trg
-    ds = dataset.map(encode, batched=True)
-    # ds = dataset.map(lambda x: encode(x, tok_src, tok_trg), batched=True)
+    tokenizer_class.src_tok = src_tok
+    tokenizer_class.trg_tok = trg_tok
+
+    ds = dataset.map(tokenizer_class.encode, batched=True)
+    # ds = dataset.map(lambda x: encode(x, src_tok, trg_tok), batched=True)
 
     # Dataset formats
     ds.set_format(type='torch', columns=['src', 'trg'])
 
     # Dataset to Pytorch DataLoader
     ds_loader = torch.utils.data.DataLoader(ds, batch_size=batch_size, num_workers=num_workers,
-                                            collate_fn=lambda x: collate_fn(x, tok_src, tok_trg, max_tokens),
+                                            collate_fn=lambda x: tokenizer_class.collate_fn(x, src_tok, trg_tok, max_tokens),
                                             shuffle=shuffle, pin_memory=True)
     return ds_loader
 
@@ -122,15 +111,15 @@ def print_translations(hypothesis, references, source=None, limit=None):
             break
 
 
-def generate_translations(model, tok_trg, data_loader, max_length, beam_width):
+def generate_translations(model, trg_tok, data_loader, max_length, beam_width):
     y_pred = []
     y_true = []
     for batch in tqdm(data_loader, total=len(data_loader)):
         src, src_mask, trg, trg_mask = batch
 
         # Get indexes
-        sos_idx = tok_trg.word2idx[tok_trg.SOS_WORD]
-        eos_idx = tok_trg.word2idx[tok_trg.EOS_WORD]
+        sos_idx = trg_tok.word2idx[trg_tok.SOS_WORD]
+        eos_idx = trg_tok.word2idx[trg_tok.EOS_WORD]
 
         # Get output
         translations = model.translate_batch(src, src_mask, sos_idx, eos_idx, max_length=max_length, beam_width=beam_width)
@@ -139,7 +128,7 @@ def generate_translations(model, tok_trg, data_loader, max_length, beam_width):
         outputs_ids = [top_trans[0][0] for top_trans in translations]
 
         # Convert ids2words
-        y_pred += tok_trg.decode(outputs_ids)
-        y_true += tok_trg.decode(trg)
+        y_pred += trg_tok.decode(outputs_ids)
+        y_true += trg_tok.decode(trg)
 
     return y_pred, y_true

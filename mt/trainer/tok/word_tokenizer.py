@@ -4,18 +4,15 @@ import math
 import numpy as np
 
 import fastBPE
+from collections import Counter
 
 src_tok = None
 trg_tok = None
-apply_bpe = False  # Hardcoded
 
 
 def encode(examples):
     # Apply BPE if needed
     src_tokenized, trg_tokenized = examples['src'], examples['trg']
-    if apply_bpe:
-        src_tokenized = src_tok.apply_bpe(examples['src'])
-        trg_tokenized = trg_tok.apply_bpe(examples['trg'])
 
     # Encode samples
     src_tokenized = [src_tok.encode_sample(x, mask_eos=False) for x in src_tokenized]
@@ -56,7 +53,7 @@ def collate_fn(examples, src_tok, trg_tok, max_tokens):
     return new_examples
 
 
-class FastBPETokenizer:
+class WordTokenizer:
 
     def __init__(self, padding=False, truncation=False, max_length=None, lang=None):
         super().__init__()
@@ -69,9 +66,9 @@ class FastBPETokenizer:
         self._special_tokens_ids_set = set(range(len(self.special_tokens)))
 
         # Define tokenizer
-        self.tokenizer = None
         self.word2idx = {}
-        self.idx2word = {}
+        self.idx2word = []
+        self.wordfreq = []  # Word + freq
 
         # Other
         self.padding = padding
@@ -82,13 +79,33 @@ class FastBPETokenizer:
     def get_vocab_size(self):
         return len(self.word2idx)
 
-    def load_vocab(self, codes_path, vocab_path):
-        self.tokenizer = fastBPE.fastBPE(codes_path, vocab_path)
+    def load_vocab(self, vocab_path):
         with open(vocab_path, 'r') as f:
-            vocabs = [l.split(' ')[0].strip() for l in f.readlines()]
-            for idx, word in enumerate(self.special_tokens + vocabs, 0):
+            self.wordfreq = [tuple(l.strip().split(' ')) for l in f.readlines()]  # Word + freq
+            self.idx2word = [wf[0] for wf in self.wordfreq]  # Words
+            for idx, word in enumerate(self.special_tokens + self.idx2word, 0):
                 self.word2idx[word] = idx
-                self.idx2word[idx] = word
+
+    def train_vocab(self, train_data, vocab_size=None, min_frequency=3, lower=False):
+        with open(train_data, 'r') as f:
+            # Read and join lines
+            text = " ".join(f.readlines())
+
+            # Make lowercase
+            text = text.lower() if lower else text
+
+            # Split words and count frequencies
+            c = Counter(text.split())
+
+            # Filter by maxsize
+            wf = c.most_common(vocab_size)
+
+            # Filter by frenquency
+            self.wordfreq = [w for w in wf if w[1] >= min_frequency]  # Word + freq
+
+    def save_vocab(self, output_dir, prefix):
+        with open(os.path.join(output_dir, f"{prefix}-vocab.txt"), 'w') as f:
+            f.writelines(f"{wf[0]} {wf[1]}\n" for wf in self.wordfreq)
 
     def pad(self, examples, keys):
         padded = {}
@@ -112,17 +129,8 @@ class FastBPETokenizer:
                 padded[k][i] = tmp
         return padded
 
-    def apply_bpe(self, x):
-        if isinstance(x, str):
-            x =[x]
-        return self.tokenizer.apply(x)
 
-    def decode_bpe(self, x):
-        if isinstance(x, str):
-            x =[x]
-        return [x_i.replace("@@ ", "").strip() for x_i in x]
-
-    def decode(self, x, return_str=True, decode_bpe=True, remove_special_tokens=True):
+    def decode(self, x, return_str=True, remove_special_tokens=True):
         if isinstance(x, torch.Tensor):
             x = x.detach().cpu().numpy()
 
@@ -136,17 +144,13 @@ class FastBPETokenizer:
         if return_str:
             sentences = [" ".join(sent) for sent in sentences]
 
-        # Decode bpe
-        if decode_bpe:
-            sentences = self.decode_bpe(sentences)
-
         return sentences
 
     def decode_with_mask(self, x, mask):
-        return [[(ii, jj) for ii, jj in zip(i, j)] for i, j in zip(self.decode(x, return_str=False, decode_bpe=False, remove_special_tokens=False), mask.cpu().numpy())]
+        return [[(ii, jj) for ii, jj in zip(i, j)] for i, j in zip(self.decode(x, return_str=False, remove_special_tokens=False), mask.cpu().numpy())]
 
     def encode_sample(self, x, mask_eos=False):
-        tokens = [w if w in self.word2idx else self.UNK_WORD for w in x.split(' ')]
+        tokens = [w if w in self.word2idx else self.UNK_WORD for w in x.lower().split(' ')]
         tokens = tokens[:(self.max_length-2)] if self.truncation else tokens  # Trucante two extra due to sos/eos
         tokens = [self.SOS_WORD] + tokens + [self.EOS_WORD]
 

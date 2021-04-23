@@ -226,8 +226,7 @@ class DecoderLayer(nn.Module):
 
 class Transformer(nn.Module):
 
-    def __init__(self, src_vocab_size, trg_vocab_size,
-                 d_model=256,
+    def __init__(self, d_model=256,
                  enc_layers=3, dec_layers=3,
                  enc_heads=8, dec_heads=8,
                  enc_dff_dim=512, dec_dff_dim=512,
@@ -240,19 +239,8 @@ class Transformer(nn.Module):
         self.max_src_len = self.src_tok.max_length if self.src_tok else max_src_len
         self.max_trg_len = self.trg_tok.max_length if self.trg_tok else max_trg_len
 
-        # Factor
-        # factor = 1
-        # d_model = d_model//factor
-        # enc_layers = enc_layers//factor
-        # dec_layers = dec_layers//factor
-        # enc_heads = enc_heads//factor
-        # dec_heads = dec_heads//factor
-        # enc_dff_dim = enc_dff_dim//factor
-        # dec_dff_dim = dec_dff_dim//factor
-
-        self.encoder = Encoder(src_vocab_size, d_model, enc_layers, enc_heads, enc_dff_dim, enc_dropout, self.max_src_len)
-        self.decoder = Decoder(trg_vocab_size, d_model, dec_layers, dec_heads, dec_dff_dim, dec_dropout, self.max_trg_len)
-        self.softmax = nn.Softmax(dim=2)
+        self.encoder = Encoder(self.src_tok.get_vocab_size(), d_model, enc_layers, enc_heads, enc_dff_dim, enc_dropout, self.max_src_len)
+        self.decoder = Decoder(self.trg_tok.get_vocab_size(), d_model, dec_layers, dec_heads, dec_dff_dim, dec_dropout, self.max_trg_len)
 
     def make_src_mask(self, src_mask):
         # Extend dimensions
@@ -297,8 +285,7 @@ class Transformer(nn.Module):
             output, last_attention = self.decoder(trg_tensor, enc_src, trg_mask, src_mask)  # (B, L, vocab), (B, nheads, L_enc, L_dec)
 
         # Find top k words from the output vocabulary
-        probs = self.softmax(output)  # (B, L, vocab)
-        return probs, last_attention
+        return output, last_attention
 
     def translate_batch(self, src, src_mask, sos_idx, eos_idx, max_length=150, beam_width=3):
         # Build source mask
@@ -326,11 +313,11 @@ class Transformer(nn.Module):
                         modified = True
 
                     # Get next word probabilities (the decoder returns one output per target-input)
-                    next_probs, _ = self.decode_word(enc_src[i].unsqueeze(0), src_mask[i].unsqueeze(0), idxs)
-                    next_probs = next_probs.squeeze(0)[-1]  # Ignore batch (Batch always 1); and get last word
+                    next_logits, _ = self.decode_word(enc_src[i].unsqueeze(0), src_mask[i].unsqueeze(0), idxs)
+                    next_logits = next_logits.squeeze(0)[-1]  # Ignore batch (Batch always 1); and get last word
 
                     # Get top k indexes (by score) to reduce the memory consumption
-                    new_scores = score + torch.log(next_probs)  # Previous score + new
+                    new_scores = score + F.log_softmax(next_logits)  # Previous score + new
                     top_idxs_i = torch.argsort(new_scores, descending=True)[:beam_width]  # tmp
 
                     # Add new candidates
