@@ -145,7 +145,7 @@ class FastBPETokenizer:
     def decode_with_mask(self, x, mask):
         return [[(ii, jj) for ii, jj in zip(i, j)] for i, j in zip(self.decode(x, return_str=False, decode_bpe=False, remove_special_tokens=False), mask.cpu().numpy())]
 
-    def preprocess(self, x, lower=True, apply_bpe=True):
+    def preprocess(self, x, lower=False, apply_bpe=True):
         if lower:
             x = x.lower()
 

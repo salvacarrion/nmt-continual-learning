@@ -1,6 +1,7 @@
 import os
-
+import math
 import torch
+import numpy as np
 
 from mt import helpers
 from torch.utils.data import Dataset, DataLoader
@@ -31,7 +32,7 @@ class TranslationDataset(Dataset):
         return sample
 
     @staticmethod
-    def collate_fn(batch):
+    def collate_fn(batch, max_tokens=4096//2):
         # Enable num_workers to make it fast
 
         # Build src pad tensor
@@ -50,6 +51,18 @@ class TranslationDataset(Dataset):
             src_attention_mask[i, :len(x["src_attention_mask"])] = torch.tensor(x["src_attention_mask"], dtype=torch.bool)
             trg[i, :len(x["trg"])] = torch.tensor(x["trg"], dtype=torch.int)
             trg_attention_mask[i, :len(x["trg_attention_mask"])] = torch.tensor(x["trg_attention_mask"], dtype=torch.bool)
+
+        # Limit tokens
+        batch_size, max_len = src.shape
+        max_batch = math.floor(max_tokens / max_len)
+
+        # Select indices
+        if batch_size > max_batch:
+            rnd_idxs = np.random.choice(np.arange(0, max_batch), size=max_batch, replace=False)
+            src = src[rnd_idxs]
+            src_attention_mask = src_attention_mask[rnd_idxs]
+            trg = trg[rnd_idxs]
+            trg_attention_mask = trg_attention_mask[rnd_idxs]
 
         return src, src_attention_mask, trg, trg_attention_mask
 

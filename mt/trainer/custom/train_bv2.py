@@ -40,16 +40,16 @@ MODEL_NAME = "transformer_bv"
 
 MAX_EPOCHS = 50
 LEARNING_RATE = 0.0005 #1e-3
-BATCH_SIZE = 128 #int(32*1.5)
+BATCH_SIZE = 32 #int(32*1.5)
 MAX_TOKENS = int(4096*1.5)
 WARMUP_UPDATES = 4000
 PATIENCE = 10
 ACC_GRADIENTS = 1
 WEIGHT_DECAY = 0.0001
 MULTIGPU = False
-DEVICE1 = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+DEVICE1 = torch.device("cuda" if torch.cuda.is_available() else "cpu")  # torch.device("cpu") #
 DEVICE2 = None  #torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-NUM_WORKERS = 16
+NUM_WORKERS = 0
 TOK_MODEL = "fastbpe"
 TOK_FOLDER = "bpe.16000"
 
@@ -220,12 +220,12 @@ def train(model_opt1, model_opt2, data_loader, criterion, clip=1.0, log_interval
     model1.train()
     optimizer1.zero_grad()
 
-    loss = 0
-    for i, batch in enumerate(data_loader):
+    for i, batch in tqdm(enumerate(data_loader), total=len(data_loader)):
+        # print(i)
+
         # Get batch data
         src1, src_mask1, trg1, trg_mask1 = [x.to(DEVICE1) for x in batch]
         batch_size, src_max_len, trg_max_len = src1.shape[0], src1.shape[1], trg1.shape[1]
-        # print(i)
         optimizer1.zero_grad()
         output, _ = model1(src1, trg1[:, :-1])
         # output = [batch size, trg len - 1, output dim]
@@ -240,43 +240,6 @@ def train(model_opt1, model_opt2, data_loader, criterion, clip=1.0, log_interval
         torch.nn.utils.clip_grad_norm_(model1.parameters(), clip)
         optimizer1.step()
         epoch_loss += loss.item()
-
-
-
-        # # Get batch data
-        # src1, src_mask1, trg1, trg_mask1 = [x.to(DEVICE1) for x in batch]
-        # batch_size, src_max_len, trg_max_len = src1.shape[0], src1.shape[1], trg1.shape[1]
-        #
-        # # Create a padding mask (no-padded=0, padded=1)
-        # src_key_padding_mask = ~src_mask1.type(torch.bool).to(DEVICE1)
-        # tgt_key_padding_mask = ~trg_mask1.type(torch.bool).to(DEVICE1)
-        # memory_key_padding_mask = src_key_padding_mask.clone()  # the src_mask used in the decoder
-        #
-        # # Create tgt_inp and tgt_out (which is tgt_inp but shifted by 1)
-        # tgt_inp, tgt_out = trg1[:, :-1], trg1[:, 1:]
-        #
-        # # Get output
-        # output1 = model1(src1, tgt_inp, src_key_padding_mask, tgt_key_padding_mask[:, :-1], memory_key_padding_mask)
-        #
-        # # Compute backward
-        # loss = criterion(rearrange(output1, 'b t v -> (b t) v'), rearrange(tgt_out, 'b o -> (b o)'))
-        # loss /= ACC_GRADIENTS
-        # loss.backward()
-        # total_loss += loss.item()
-        #
-        # # Accumulate gradients
-        # if (i+1) % ACC_GRADIENTS == 0 or (i+1) == len(data_loader):
-        #     # Clip params
-        #     torch.nn.utils.clip_grad_norm_(model1.parameters(), clip)
-        #
-        #     # Update parameters
-        #     optimizer1.step_and_update_lr()
-        #     optimizer1.zero_grad()
-        #
-        # # Log progress
-        # if (i+1) % log_interval == 0:
-        #     metrics = log_progress("train", total_loss, epoch_i+1, i+1, len(data_loader), start_time, tb_writer)
-        #     all_metrics.append(metrics)
 
     return epoch_loss / len(data_loader), all_metrics
 
@@ -388,7 +351,8 @@ def epoch_time(start_time, end_time):
 if __name__ == "__main__":
     # Get all folders in the root path
     #datasets = [os.path.join(DATASETS_PATH, name) for name in os.listdir(DATASETS_PATH) if os.path.isdir(os.path.join(DATASETS_PATH, name))]
-    datasets = [os.path.join(DATASETS_PATH, "multi30k_de-en")]
+    # datasets = [os.path.join(DATASETS_PATH, "multi30k_de-en")]
+    datasets = [os.path.join(DATASETS_PATH, "health_es-en")]
     for dataset in datasets:
         domain, (src, trg) = utils.get_dataset_ids(dataset)
         fname_base = f"{domain}_{src}-{trg}"

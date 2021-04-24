@@ -11,8 +11,12 @@ from trainer.tok.word_tokenizer import WordTokenizer
 tok_model = "wt"
 
 # Get all folders in the root path
-datasets = [os.path.join(DATASETS_PATH, name) for name in os.listdir(DATASETS_PATH) if os.path.isdir(os.path.join(DATASETS_PATH, name))]
+excluded = {"multi30k_de-en"}
+datasets = set(os.listdir(DATASETS_PATH))-excluded
+
+datasets = [os.path.join(DATASETS_PATH, name) for name in datasets if os.path.isdir(os.path.join(DATASETS_PATH, name))]
 # datasets = [os.path.join(DATASETS_PATH, "multi30k_de-en")]
+
 for dataset in datasets:
     domain, (src, trg) = utils.get_dataset_ids(dataset)
     fname_base = f"{domain}_{src}-{trg}"

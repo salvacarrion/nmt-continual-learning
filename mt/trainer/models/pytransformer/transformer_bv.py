@@ -26,7 +26,7 @@ class Encoder(nn.Module):
                  pf_dim,
                  dropout,
                  device,
-                 max_length=100):
+                 max_length=200):
         super().__init__()
 
         self.device = device
@@ -55,9 +55,10 @@ class Encoder(nn.Module):
         pos = torch.arange(0, src_len).unsqueeze(0).repeat(batch_size, 1).to(self.device)
 
         # pos = [batch size, src len]
-
-        src = self.dropout((self.tok_embedding(src) * self.scale) + self.pos_embedding(pos))
-
+        try:
+            src = self.dropout((self.tok_embedding(src) * self.scale) + self.pos_embedding(pos))
+        except IndexError as e:
+            asd = 44
         # src = [batch size, src len, hid dim]
 
         for layer in self.layers:
@@ -212,7 +213,7 @@ class Decoder(nn.Module):
                  pf_dim,
                  dropout,
                  device,
-                 max_length=100):
+                 max_length=200):
         super().__init__()
 
         self.device = device
