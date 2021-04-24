@@ -14,6 +14,7 @@ import torch.optim as optim
 from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data import DataLoader
 import spacy
+from torchtext.data.metrics import bleu_score
 
 import torchtext
 from torchtext.legacy.datasets import Multi30k
@@ -29,7 +30,7 @@ from collections import Counter
 from mt.preprocess import utils
 from mt import helpers
 from mt.trainer.datasets import TranslationDataset
-from mt import DATASETS_PATH, DATASET_CLEAN_NAME, DATASET_TOK_NAME, DATASET_LOGS_NAME, DATASET_CHECKPOINT_NAME
+from mt import DATASETS_PATH, DATASET_EVAL_NAME, DATASET_CLEAN_NAME, DATASET_TOK_NAME, DATASET_LOGS_NAME, DATASET_CHECKPOINT_NAME
 from mt.trainer.models.pytransformer.transformer import TransformerModel
 from mt.trainer.models.optim import  ScheduledOptim
 from mt.trainer.models.pytransformer.transformer_bv import Encoder, Decoder, Seq2Seq
@@ -105,10 +106,8 @@ def run_experiment(datapath, src, trg, model_name, domain=None):
     src_tok, trg_tok = helpers.get_tokenizers(os.path.join(datapath, DATASET_TOK_NAME, TOK_FOLDER), src, trg, tok_model=TOK_MODEL)
 
     # Load dataset
-    train_ds = TranslationDataset(os.path.join(datapath, DATASET_CLEAN_NAME), src_tok, trg_tok, "train")
-    val_ds = TranslationDataset(os.path.join(datapath, DATASET_CLEAN_NAME), src_tok, trg_tok, "val")
-    train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS, collate_fn=TranslationDataset.collate_fn, pin_memory=True)
-    val_loader = DataLoader(val_ds, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS, collate_fn=TranslationDataset.collate_fn, pin_memory=True)
+    test_ds = TranslationDataset(os.path.join(datapath, DATASET_CLEAN_NAME), src_tok, trg_tok, "test")
+    test_loader = DataLoader(test_ds, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS, collate_fn=TranslationDataset.collate_fn, pin_memory=True)
 
     # # Instantiate model #1
     # model1 = TransformerModel(src_tok=src_tok, trg_tok=trg_tok)
@@ -154,98 +153,38 @@ def run_experiment(datapath, src, trg, model_name, domain=None):
     TRG_PAD_IDX = trg_tok.word2idx[trg_tok.PAD_WORD]
     model1 = Seq2Seq(enc, dec, SRC_PAD_IDX, TRG_PAD_IDX, DEVICE1).to(DEVICE1)
     model1.apply(initialize_weights)
-    optimizer1 = torch.optim.Adam(model1.parameters(), lr=LEARNING_RATE)
     print(f'The model has {count_parameters(model1):,} trainable parameters')
     criterion = nn.CrossEntropyLoss(ignore_index=TRG_PAD_IDX)
 
-    # Tensorboard (it needs some epochs to start working ~10-20)
-    tr_writer = SummaryWriter(os.path.join(datapath, DATASET_LOGS_NAME, f"{model_name}/train"))
-    val_writer = SummaryWriter(os.path.join(datapath, DATASET_LOGS_NAME, f"{model_name}/val"))
+    model1.load_state_dict(torch.load(checkpoint_path))
 
-    # Train and validate model
-    fit((model1, optimizer1), (None, None), train_loader=train_loader, val_loader=val_loader,
-        epochs=MAX_EPOCHS, criterion=criterion,
-        checkpoint_path=checkpoint_path,
-        tr_writer=tr_writer, val_writer=val_writer)
+    # test_loss, _ = evaluate(model1, test_loader, criterion)
+    # print(f'| Test Loss: {test_loss:.3f} | Test PPL: {math.exp(test_loss):7.3f} |')
 
-    print("Done!")
+    src_dec_all, hyp_dec_all, ref_dec_all = get_translations(model1, test_loader, src_tok, trg_tok)
 
+    # Create path
+    eval_name = domain
+    eval_path = os.path.join(datapath, DATASET_EVAL_NAME, eval_name)
+    Path(eval_path).mkdir(parents=True, exist_ok=True)
 
-def fit(model_opt1, model_opt2, train_loader, val_loader, epochs, criterion, checkpoint_path, tr_writer=None, val_writer=None):
-    if not checkpoint_path:
-        print("[WARNING] Traning without checkpoint path. The model won't be saved.")
+    # Save translations to file
+    with open(os.path.join(eval_path, 'src.txt'), 'w') as f:
+        f.writelines("%s\n" % s for s in src_dec_all)
+    with open(os.path.join(eval_path, 'hyp.txt'), 'w') as f:
+        f.writelines("%s\n" % s for s in hyp_dec_all)
+    with open(os.path.join(eval_path, 'ref.txt'), 'w') as f:
+        f.writelines("%s\n" % s for s in ref_dec_all)
+    print("Translations written!")
 
-    lowest_val = 1e9
-    last_checkpoint = 0
-    for epoch_i in range(epochs):
-        start_time = time.time()
-
-        # Train model
-        tr_loss, tr_metrics = train(model_opt1, model_opt2, train_loader, criterion, epoch_i=epoch_i, tb_writer=tr_writer)
-
-        end_time = time.time()
-        epoch_mins, epoch_secs = epoch_time(start_time, end_time)
-        print(f'Epoch: {epoch_i + 1:02} | Time: {epoch_mins}m {epoch_secs}s')
-        print(f'\tTrain Loss: {tr_loss:.3f} | Train PPL: {math.exp(tr_loss):7.3f}')
-
-        # # Evaluate
-        val_loss, val_metrics = evaluate(model_opt1[0], val_loader, criterion, epoch_i=epoch_i, tb_writer=val_writer)
-
-        # Save checkpoint
-        if checkpoint_path:
-            if val_loss < lowest_val:
-                avg_bleu = 0#sum([x["torch_bleu"] for x in val_metrics]) / len(val_metrics)
-                print(f"New best score! Loss={val_loss} | BLEU={avg_bleu}. (Saving checkpoint...)")
-                last_checkpoint = epoch_i
-                lowest_val = val_loss
-                torch.save(model_opt1[0].state_dict(), checkpoint_path)
-                print("=> Checkpoint saved!")
-
-            else:
-                # Early stop
-                if PATIENCE != -1 and (epoch_i-last_checkpoint) >= PATIENCE:
-                    print(f"Early stop. Validation loss didn't improve for {PATIENCE} epochs")
-                    break
+    m_bleu_score = bleu_score([x.split(" ") for x in hyp_dec_all], [[x.split(" ")] for x in ref_dec_all])
+    print(f'BLEU score = {m_bleu_score*100:.2f}')
 
 
-def train(model_opt1, model_opt2, data_loader, criterion, clip=1.0, log_interval=1, epoch_i=None, tb_writer=None):
-    epoch_loss = 0.0
-    all_metrics = []
-    start_time = time.time()
-
-    # Unpack values
-    (model1, optimizer1) = model_opt1
-    (model2, optimizer2) = model_opt2
-
-    model1.train()
-    optimizer1.zero_grad()
-
-    for i, batch in tqdm(enumerate(data_loader), total=len(data_loader)):
-        # print(i)
-
-        # Get batch data
-        src1, src_mask1, trg1, trg_mask1 = [x.to(DEVICE1) for x in batch]
-        batch_size, src_max_len, trg_max_len = src1.shape[0], src1.shape[1], trg1.shape[1]
-        optimizer1.zero_grad()
-        output, _ = model1(src1, trg1[:, :-1])
-        # output = [batch size, trg len - 1, output dim]
-        # trg = [batch size, trg len]
-        output_dim = output.shape[-1]
-        output = output.contiguous().view(-1, output_dim)
-        trg1 = trg1[:, 1:].contiguous().view(-1).long()
-        # output = [batch size * trg len - 1, output dim]
-        # trg = [batch size * trg len - 1]
-        loss = criterion(output, trg1)
-        loss.backward()
-        torch.nn.utils.clip_grad_norm_(model1.parameters(), clip)
-        optimizer1.step()
-        epoch_loss += loss.item()
-
-    return epoch_loss / len(data_loader), all_metrics
-
-
-def evaluate(model, data_loader, criterion, log_interval=1, epoch_i=None, tb_writer=None):
+def evaluate(model, data_loader, criterion):
+    src_dec_all, ref_dec_all, hyp_dec_all = [], [], []
     epoch_loss = 0
+    metrics = {}
 
     model.eval()
     for i, batch in tqdm(enumerate(data_loader), total=len(data_loader)):
@@ -273,57 +212,118 @@ def evaluate(model, data_loader, criterion, log_interval=1, epoch_i=None, tb_wri
 
             epoch_loss += loss.item()
 
-    return epoch_loss / len(data_loader)
+            # # Get output
+            # outputs = model.translate_batch(src, src_key_padding_mask, max_length=100, beam_width=1)
+            #
+            # # Get translations
+            # trg_pred = [x[0][0] for x in outputs]  # Get best
+            # src_dec, ref_dec, hyp_dec = get_translations(src, trg, trg_pred, model.src_tok, model.trg_tok)
+            # src_dec_all += src_dec
+            # ref_dec_all += ref_dec
+            # hyp_dec_all += hyp_dec
+            # break
+
+    # # Print translations
+    # if print_translations:
+    #     helpers.print_translations(hypothesis=hyp_dec_all, references=ref_dec_all, source=src_dec_all, limit=None)
+    #
+    # # Compute metrics
+    # metrics = {}
+    # torch_bleu = torchtext.data.metrics.bleu_score([x.split(" ") for x in hyp_dec_all],
+    #                                                [[x.split(" ")] for x in ref_dec_all])
+    # metrics["torch_bleu"] = torch_bleu
+
+    return epoch_loss / len(data_loader), (src_dec_all, ref_dec_all, hyp_dec_all)
 
 
-def log_progress(prefix, total_loss, epoch_i, batch_i, n_batches, start_time, tb_writer, translations=None):
-    elapsed = time.time() - start_time
-    sec_per_batch = elapsed / batch_i
-    total_minibatches = (epoch_i - 1) * n_batches + batch_i
+def get_translations(model, data_loader, src_tok, trg_tok, max_len=100):
+    srcs = []
+    trgs = []
+    pred_trgs = []
 
-    # Compute metrics
-    metrics = {
-        "loss": total_loss / batch_i,
-        "ppl": math.exp(total_loss / batch_i),
-    }
+    model.eval()
+    for i, batch in tqdm(enumerate(data_loader), total=len(data_loader)):
+        # Get batch data
+        src1, src_mask1, trg1, trg_mask1 = [x.to(DEVICE1) for x in batch]
+        batch_size, src_max_len, trg_max_len = src1.shape[0], src1.shape[1], trg1.shape[1]
 
-    if translations:
-        src_dec, ref_dec, hyp_dec = translations
+        pred_trg, _ = translate_sentence_vectorized(src1, src_tok, trg_tok, model, max_len)
 
-        # Compute metrics
-        torch_bleu = torchtext.data.metrics.bleu_score([x.split(" ") for x in hyp_dec], [[x.split(" ")] for x in ref_dec])
-        metrics["torch_bleu"] = torch_bleu
+        pred_trgs += trg_tok.decode(pred_trg)
+        trgs += trg_tok.decode(trg1)
+        srcs += src_tok.decode(src1)
+        break
 
-        # hg_bleu = load_metric("bleu").compute(predictions=[x.split(" ") for x in hyp_dec], references=[[x.split(" ")] for x in ref_dec])
-        # metrics["hg_bleu"] = hg_bleu["bleu"]
-        #
-        # hg_sacrebleu = load_metric("sacrebleu").compute(predictions=hyp_dec, references=[[x] for x in ref_dec])
-        # metrics["hg_sacrebleu"] = hg_sacrebleu["score"]
-
-        # metrics["ter"] = 0
-        # metrics["chrf"] = 0
-
-    # Print stuff
-    str_metrics = "| ".join(["{}: {:.3f}".format(k, v) for k, v in metrics.items()])
-    print('[{}] | Epoch: #{:<3} | {:>3}/{:} batches | {:.2f} sec/it (est.: {:.2f} min) || {}'.format(
-        prefix.title(), epoch_i, batch_i, n_batches, sec_per_batch, (n_batches-batch_i)*sec_per_batch/60, str_metrics))
-
-    # Tensorboard
-    if tb_writer:
-        for k, v in metrics.items():
-            tb_writer.add_scalar(f'{prefix}_{k.lower()}', v, total_minibatches)
-            # wandb.log({f'{prefix}_{k.lower()}': v})
-
-    return metrics
+    return srcs, pred_trgs, trgs
 
 
-def get_translations(src, trg, trg_pred, src_tok, trg_tok):
-    # Decode tensors
-    src_dec = src_tok.decode(src)
-    ref_dec = trg_tok.decode(trg)
-    hyp_dec = trg_tok.decode(trg_pred)
-    return src_dec, ref_dec, hyp_dec
+def translate_sentence_vectorized(src_tensor, src_tok, trg_tok, model, max_len):
+    assert isinstance(src_tensor, torch.Tensor)
 
+    model.eval()
+    src_mask = model.make_src_mask(src_tensor)
+
+    with torch.no_grad():
+        enc_src = model.encoder(src_tensor, src_mask)
+    # enc_src = [batch_sz, src_len, hid_dim]
+
+    TRG_SOS_IDX = trg_tok.word2idx[trg_tok.SOS_WORD]
+    TRG_EOS_IDX = trg_tok.word2idx[trg_tok.EOS_WORD]
+    trg_indexes = [[TRG_SOS_IDX] for _ in range(len(src_tensor))]
+    # Even though some examples might have been completed by producing a <eos> token
+    # we still need to feed them through the model because other are not yet finished
+    # and all examples act as a batch. Once every single sentence prediction encounters
+    # <eos> token, then we can stop predicting.
+    translations_done = [0] * len(src_tensor)
+    for i in range(max_len):
+        trg_tensor = torch.LongTensor(trg_indexes).to(enc_src.device)
+        trg_mask = model.make_trg_mask(trg_tensor)
+        with torch.no_grad():
+            output, attention = model.decoder(trg_tensor, enc_src, trg_mask, src_mask)
+        pred_tokens = output.argmax(2)[:,-1]
+        for i, pred_token_i in enumerate(pred_tokens):
+            trg_indexes[i].append(pred_token_i)
+            if pred_token_i == TRG_EOS_IDX:
+                translations_done[i] = 1
+        if all(translations_done):
+            break
+
+    # Iterate through each predicted example one by one;
+    # Cut-off the portion including the after the <eos> token
+    pred_sentences = []
+    for trg_sentence in trg_indexes:
+        pred_sentence = []
+        for i in range(1, len(trg_sentence)):
+            trg_idx = int(trg_sentence[i])
+            pred_sentence.append(trg_idx)
+            if trg_idx == TRG_EOS_IDX:
+                break
+        pred_sentences.append(pred_sentence)
+
+    return pred_sentences, attention
+
+
+def calculate_bleu_alt(iterator, src_field, trg_field, model, device, max_len = 50):
+    trgs = []
+    pred_trgs = []
+    with torch.no_grad():
+        for batch in iterator:
+            src = batch.src
+            trg = batch.trg
+            _trgs = []
+            for sentence in trg:
+                tmp = []
+                # Start from the first token which skips the <start> token
+                for i in sentence[1:]:
+                    # Targets are padded. So stop appending as soon as a padding or eos token is encountered
+                    if i == trg_field.vocab.stoi[trg_field.eos_token] or i == trg_field.vocab.stoi[trg_field.pad_token]:
+                        break
+                    tmp.append(trg_field.vocab.itos[i])
+                _trgs.append([tmp])
+            trgs += _trgs
+            pred_trg, _ = translate_sentence_vectorized(src, src_field, trg_field, model, device)
+            pred_trgs += pred_trg
+    return pred_trgs, trgs, bleu_score(pred_trgs, trgs)
 
 def epoch_time(start_time, end_time):
     elapsed_time = end_time - start_time
