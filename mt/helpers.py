@@ -71,8 +71,9 @@ def load_dataset(datapath, src, trg, splits=None):
     print(f"Reading files... ({datapath})")
     datasets = {}
     for s in splits:
-        df = build_dataframe(s)
-        datasets[s] = Dataset.from_pandas(df)
+        datasets[s] = build_dataframe(s)
+        # df = build_dataframe(s)
+        # datasets[s] = Dataset.from_pandas(df)
 
     return datasets
 
@@ -83,9 +84,6 @@ def build_dataloader(dataset, src_tok, trg_tok, tokenizer_class, batch_size=1, m
     tokenizer_class.trg_tok = trg_tok
 
     ds = dataset.map(tokenizer_class.encode, batched=True)
-    # ds = dataset.map(lambda x: encode(x, src_tok, trg_tok), batched=True)
-
-    # Dataset formats
     ds.set_format(type='torch', columns=['src', 'trg'])
 
     # Dataset to Pytorch DataLoader

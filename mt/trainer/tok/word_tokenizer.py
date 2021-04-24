@@ -18,39 +18,39 @@ def encode(examples):
     src_tokenized = [src_tok.encode_sample(x, mask_eos=False) for x in src_tokenized]
     trg_tokenized = [trg_tok.encode_sample(x, mask_eos=False) for x in trg_tokenized]
 
-    return {'src': src_tokenized, 'trg': trg_tokenized}
+    return src_tokenized, trg_tokenized
 
 
 def collate_fn(examples, src_tok, trg_tok, max_tokens):
     # Decompose examples
-    src = [x['src'] for x in examples]
-    trg = [x['trg'] for x in examples]
+    # src = [x['src'] for x in examples]
+    # trg = [x['trg'] for x in examples]
 
-    # Processed examples
-    src = src_tok.pad(src, keys=['ids', 'attention_mask'])
-    trg = trg_tok.pad(trg, keys=['ids', 'attention_mask'])
-
-    # From list to tensor
-    src['ids'] = torch.stack(src['ids'], dim=0)
-    src['attention_mask'] = torch.stack(src['attention_mask'], dim=0)
-    trg['ids'] = torch.stack(trg['ids'], dim=0)
-    trg['attention_mask'] = torch.stack(trg['attention_mask'], dim=0)
-
-    # Limit tokens
-    batch_size, max_len = len(src['ids']), len(src['ids'][0])
-    max_batch = math.floor(max_tokens / max_len)
-
-    # Select indices
-    if max_batch < batch_size:
-        rnd_idxs = np.random.choice(np.arange(0, max_batch), size=max_batch, replace=False)
-        src['ids'] = src['ids'][rnd_idxs]
-        src['attention_mask'] = src['attention_mask'][rnd_idxs]
-        trg['ids'] = trg['ids'][rnd_idxs]
-        trg['attention_mask'] = trg['attention_mask'][rnd_idxs]
+    # # Processed examples
+    # src = src_tok.pad(src, keys=['ids', 'attention_mask'])
+    # trg = trg_tok.pad(trg, keys=['ids', 'attention_mask'])
+    #
+    # # From list to tensor
+    # src['ids'] = torch.stack(src['ids'], dim=0)
+    # src['attention_mask'] = torch.stack(src['attention_mask'], dim=0)
+    # trg['ids'] = torch.stack(trg['ids'], dim=0)
+    # trg['attention_mask'] = torch.stack(trg['attention_mask'], dim=0)
+    #
+    # # Limit tokens
+    # batch_size, max_len = len(src['ids']), len(src['ids'][0])
+    # max_batch = math.floor(max_tokens / max_len)
+    #
+    # # Select indices
+    # if max_batch < batch_size:
+    #     rnd_idxs = np.random.choice(np.arange(0, max_batch), size=max_batch, replace=False)
+    #     src['ids'] = src['ids'][rnd_idxs]
+    #     src['attention_mask'] = src['attention_mask'][rnd_idxs]
+    #     trg['ids'] = trg['ids'][rnd_idxs]
+    #     trg['attention_mask'] = trg['attention_mask'][rnd_idxs]
 
     # Convert list to PyTorch tensor
-    new_examples = [src['ids'], src['attention_mask'], trg['ids'], trg['attention_mask']]
-    return new_examples
+    # new_examples = [src['ids'], src['attention_mask'], trg['ids'], trg['attention_mask']]
+    return torch.tensor(1), torch.tensor(1), torch.tensor(1), torch.tensor(1)
 
 
 class WordTokenizer:
@@ -149,8 +149,13 @@ class WordTokenizer:
     def decode_with_mask(self, x, mask):
         return [[(ii, jj) for ii, jj in zip(i, j)] for i, j in zip(self.decode(x, return_str=False, remove_special_tokens=False), mask.cpu().numpy())]
 
+    def preprocess(self, x, lower=False):
+        if lower:
+            x = x.lower()
+        return x.split(' ')
+
     def encode_sample(self, x, mask_eos=False):
-        tokens = [w if w in self.word2idx else self.UNK_WORD for w in x.lower().split(' ')]
+        tokens = [w if w in self.word2idx else self.UNK_WORD for w in self.preprocess(x)]
         tokens = tokens[:(self.max_length-2)] if self.truncation else tokens  # Trucante two extra due to sos/eos
         tokens = [self.SOS_WORD] + tokens + [self.EOS_WORD]
 

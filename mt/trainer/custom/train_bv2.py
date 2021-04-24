@@ -12,6 +12,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.tensorboard import SummaryWriter
+from torch.utils.data import DataLoader
 import spacy
 
 import torchtext
@@ -23,9 +24,11 @@ import sacrebleu
 from datasets import load_metric
 
 from tqdm import tqdm
+from collections import Counter
 
 from mt.preprocess import utils
 from mt import helpers
+from mt.trainer.datasets import TranslationDataset
 from mt import DATASETS_PATH, DATASET_CLEAN_NAME, DATASET_TOK_NAME, DATASET_LOGS_NAME, DATASET_CHECKPOINT_NAME
 from mt.trainer.models.pytransformer.transformer import TransformerModel
 from mt.trainer.models.optim import  ScheduledOptim
@@ -33,7 +36,6 @@ from mt.trainer.models.pytransformer.transformer_bv import Encoder, Decoder, Seq
 from mt.trainer.tok import word_tokenizer
 
 MODEL_NAME = "transformer_bv"
-tok_folder = "wt.16000"
 
 
 MAX_EPOCHS = 50
@@ -47,6 +49,9 @@ WEIGHT_DECAY = 0.0001
 MULTIGPU = False
 DEVICE1 = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 DEVICE2 = None  #torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+NUM_WORKERS = 16
+TOK_MODEL = "fastbpe"
+TOK_FOLDER = "bpe.16000"
 
 print(f"Device #1: {DEVICE1}")
 print(f"Device #2: {DEVICE2}")
@@ -93,21 +98,17 @@ def initialize_weights(m):
         nn.init.xavier_uniform_(m.weight.data)
 
 
-def run_experiment(datapath, src, trg, model_name, tok_folder, domain=None, num_workers=0):
+def run_experiment(datapath, src, trg, model_name, domain=None):
     checkpoint_path = os.path.join(datapath, DATASET_CHECKPOINT_NAME, f"{model_name}_{domain}_best.pt")
 
     # Load tokenizers
-    src_tok, trg_tok = helpers.get_tokenizers(os.path.join(datapath, DATASET_TOK_NAME, tok_folder), src, trg, tok_model="wt")
+    src_tok, trg_tok = helpers.get_tokenizers(os.path.join(datapath, DATASET_TOK_NAME, TOK_FOLDER), src, trg, tok_model=TOK_MODEL)
 
     # Load dataset
-    datasets = helpers.load_dataset(os.path.join(datapath, DATASET_CLEAN_NAME), src, trg, splits=["train", "val", "test"])
-
-    # Prepare data loaders
-    train_loader = helpers.build_dataloader(datasets["train"], src_tok, trg_tok, word_tokenizer, batch_size=BATCH_SIZE,
-                                            max_tokens=MAX_TOKENS, num_workers=num_workers)
-    val_loader = helpers.build_dataloader(datasets["val"], src_tok, trg_tok, word_tokenizer, batch_size=BATCH_SIZE,
-                                          max_tokens=MAX_TOKENS, num_workers=num_workers, shuffle=False)
-    # test_loader = helpers.build_dataloader(datasets["test"], src_tok, trg_tok, batch_size=batch_size, max_tokens=max_tokens, num_workers=num_workers, shuffle=False)
+    train_ds = TranslationDataset(os.path.join(datapath, DATASET_CLEAN_NAME), src_tok, trg_tok, "train")
+    val_ds = TranslationDataset(os.path.join(datapath, DATASET_CLEAN_NAME), src_tok, trg_tok, "val")
+    train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS, collate_fn=TranslationDataset.collate_fn, pin_memory=True)
+    val_loader = DataLoader(val_ds, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS, collate_fn=TranslationDataset.collate_fn, pin_memory=True)
 
     # # Instantiate model #1
     # model1 = TransformerModel(src_tok=src_tok, trg_tok=trg_tok)
@@ -189,22 +190,22 @@ def fit(model_opt1, model_opt2, train_loader, val_loader, epochs, criterion, che
 
         # # Evaluate
         # val_loss, val_metrics = evaluate(model_opt1[0], val_loader, criterion, epoch_i=epoch_i, tb_writer=val_writer)
-        #
-        # # Save checkpoint
-        # if checkpoint_path:
-        #     if val_loss < lowest_val:
-        #         avg_bleu = sum([x["torch_bleu"] for x in val_metrics]) / len(val_metrics)
-        #         print(f"New best score! Loss={val_loss} | BLEU={avg_bleu}. (Saving checkpoint...)")
-        #         last_checkpoint = epoch_i
-        #         lowest_val = val_loss
-        #         torch.save(model_opt1[0].state_dict(), checkpoint_path)
-        #         print("=> Checkpoint saved!")
-        #
-        #     else:
-        #         # Early stop
-        #         if PATIENCE != -1 and (epoch_i-last_checkpoint) >= PATIENCE:
-        #             print(f"Early stop. Validation loss didn't improve for {PATIENCE} epochs")
-        #             break
+        val_loss = tr_loss
+        # Save checkpoint
+        if checkpoint_path:
+            if val_loss < lowest_val:
+                avg_bleu = 0#sum([x["torch_bleu"] for x in val_metrics]) / len(val_metrics)
+                print(f"New best score! Loss={val_loss} | BLEU={avg_bleu}. (Saving checkpoint...)")
+                last_checkpoint = epoch_i
+                lowest_val = val_loss
+                torch.save(model_opt1[0].state_dict(), checkpoint_path)
+                print("=> Checkpoint saved!")
+
+            else:
+                # Early stop
+                if PATIENCE != -1 and (epoch_i-last_checkpoint) >= PATIENCE:
+                    print(f"Early stop. Validation loss didn't improve for {PATIENCE} epochs")
+                    break
 
 
 def train(model_opt1, model_opt2, data_loader, criterion, clip=1.0, log_interval=1, epoch_i=None, tb_writer=None):
@@ -224,14 +225,14 @@ def train(model_opt1, model_opt2, data_loader, criterion, clip=1.0, log_interval
         # Get batch data
         src1, src_mask1, trg1, trg_mask1 = [x.to(DEVICE1) for x in batch]
         batch_size, src_max_len, trg_max_len = src1.shape[0], src1.shape[1], trg1.shape[1]
-
+        # print(i)
         optimizer1.zero_grad()
         output, _ = model1(src1, trg1[:, :-1])
         # output = [batch size, trg len - 1, output dim]
         # trg = [batch size, trg len]
         output_dim = output.shape[-1]
         output = output.contiguous().view(-1, output_dim)
-        trg1 = trg1[:, 1:].contiguous().view(-1)
+        trg1 = trg1[:, 1:].contiguous().view(-1).long()
         # output = [batch size * trg len - 1, output dim]
         # trg = [batch size * trg len - 1]
         loss = criterion(output, trg1)
@@ -239,6 +240,8 @@ def train(model_opt1, model_opt2, data_loader, criterion, clip=1.0, log_interval
         torch.nn.utils.clip_grad_norm_(model1.parameters(), clip)
         optimizer1.step()
         epoch_loss += loss.item()
+
+
 
         # # Get batch data
         # src1, src_mask1, trg1, trg_mask1 = [x.to(DEVICE1) for x in batch]
@@ -396,4 +399,4 @@ if __name__ == "__main__":
         Path(os.path.join(dataset, DATASET_CHECKPOINT_NAME)).mkdir(parents=True, exist_ok=True)
 
         # Train model
-        run_experiment(dataset, src, trg, model_name=MODEL_NAME, tok_folder=tok_folder, domain=domain)
+        run_experiment(dataset, src, trg, model_name=MODEL_NAME, domain=domain)

@@ -145,8 +145,16 @@ class FastBPETokenizer:
     def decode_with_mask(self, x, mask):
         return [[(ii, jj) for ii, jj in zip(i, j)] for i, j in zip(self.decode(x, return_str=False, decode_bpe=False, remove_special_tokens=False), mask.cpu().numpy())]
 
+    def preprocess(self, x, lower=True, apply_bpe=True):
+        if lower:
+            x = x.lower()
+
+        if apply_bpe:
+            x = self.tokenizer.apply([x])[0]
+        return x.split(' ')
+
     def encode_sample(self, x, mask_eos=False):
-        tokens = [w if w in self.word2idx else self.UNK_WORD for w in x.split(' ')]
+        tokens = [w if w in self.word2idx else self.UNK_WORD for w in self.preprocess(x)]
         tokens = tokens[:(self.max_length-2)] if self.truncation else tokens  # Trucante two extra due to sos/eos
         tokens = [self.SOS_WORD] + tokens + [self.EOS_WORD]
 
