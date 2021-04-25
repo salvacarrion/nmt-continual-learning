@@ -9,11 +9,11 @@ from mt.preprocess import utils
 SUFFLE = True
 CONSTRAINED = True
 
-TR_DATA_PATH = "/home/salvacarrion/Documents/Programming/Datasets/Scielo/originals/scielo-gma/scielo-gma"
+TR_DATA_PATH = "/home/salva/Documents/Programming/Datasets/scielo/originals/scielo-gma/scielo-gma"
 TR_RAW_FILES = ["es-en-gma-biological.csv", "es-en-gma-health.csv", "fr-en-gma-health.csv",
                 "pt-en-gma-biological.csv", "pt-en-gma-health.csv"]
 
-TS_DATA_PATH = "/home/salvacarrion/Documents/Programming/Datasets/Scielo/originals/testset-gma/testset_gma"
+TS_DATA_PATH = "/home/salva/Documents/Programming/Datasets/scielo/originals/testset-gma/testset_gma"
 TS_RAW_FILES = ["test-gma-en2es-biological.csv", "test-gma-en2es-health.csv", "test-gma-en2fr-health.csv",
                 "test-gma-en2pt-biological.csv", "test-gma-en2pt-health.csv", "test-gma-es2en-biological.csv",
                 "test-gma-es2en-health.csv", "test-gma-fr2en-health.csv", "test-gma-pt2en-biological.csv",

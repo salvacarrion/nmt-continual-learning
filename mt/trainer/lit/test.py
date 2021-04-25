@@ -16,7 +16,7 @@ from mt.trainer.models.rnn.lit_rnn import LitRNN, init_weights
 
 MODEL_NAME = "transformer"
 tok_folder = "bpe.8000"
-CHECKPOINT = "/home/salvacarrion/linux-hdd/Datasets/Scielo/constrained/datasets/tmp|health_es-en/checkpoints/version_0/checkpoints/tmp|health-epoch=10-train_loss=1.48.ckpt"
+CHECKPOINT = ""
 MAX_LENGTH=100
 BEAM_WIDTH=1
 np.random.seed(123)
