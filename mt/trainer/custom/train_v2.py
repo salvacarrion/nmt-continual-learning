@@ -38,7 +38,7 @@ MODEL_NAME = "transformer_bv"
 
 
 MAX_EPOCHS = 50
-LEARNING_RATE = 0.0005 #1e-3
+LEARNING_RATE = 1e-3
 BATCH_SIZE = 128 #int(32*1.5)
 MAX_TOKENS = int(4096*1.5)
 WARMUP_UPDATES = 4000
@@ -49,8 +49,8 @@ MULTIGPU = False
 DEVICE1 = torch.device("cuda" if torch.cuda.is_available() else "cpu")  # torch.device("cpu") #
 DEVICE2 = None  #torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 NUM_WORKERS = 0
-TOK_MODEL = "fastbpe"
-TOK_FOLDER = "bpe.16000"
+TOK_MODEL = "wt" #"fastbpe"
+TOK_FOLDER = "wt.16000" #"bpe.16000"
 
 print(f"Device #1: {DEVICE1}")
 print(f"Device #2: {DEVICE2}")
@@ -88,15 +88,6 @@ torch.backends.cudnn.benchmark = False
 ###########################################################################
 
 
-def count_parameters(model):
-    return sum(p.numel() for p in model.parameters() if p.requires_grad)
-
-
-def initialize_weights(m):
-    if hasattr(m, 'weight') and m.weight.dim() > 1:
-        nn.init.xavier_uniform_(m.weight.data)
-
-
 def run_experiment(datapath, src, trg, model_name, domain=None):
     checkpoint_path = os.path.join(datapath, DATASET_CHECKPOINT_NAME, f"{model_name}_{domain}_best.pt")
 
@@ -106,7 +97,7 @@ def run_experiment(datapath, src, trg, model_name, domain=None):
     # Load dataset
     train_ds = TranslationDataset(os.path.join(datapath, DATASET_CLEAN_NAME), src_tok, trg_tok, "train")
     val_ds = TranslationDataset(os.path.join(datapath, DATASET_CLEAN_NAME), src_tok, trg_tok, "val")
-    train_loader = DataLoader(val_ds, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS, collate_fn=TranslationDataset.collate_fn, pin_memory=True)
+    train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS, collate_fn=TranslationDataset.collate_fn, pin_memory=True)
     val_loader = DataLoader(val_ds, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS, collate_fn=TranslationDataset.collate_fn, pin_memory=True)
 
     # Instantiate model #1
@@ -116,11 +107,11 @@ def run_experiment(datapath, src, trg, model_name, domain=None):
                         enc_dff_dim=512, dec_dff_dim=512,
                         enc_dropout=0.1, dec_dropout=0.1,
                         max_src_len=2000, max_trg_len=2000,
-                        src_tok=src_tok, trg_tok=trg_tok)
+                        src_tok=src_tok, trg_tok=trg_tok,
+                        static_pos_emb=True)
     model.to(DEVICE1)
-    model.apply(initialize_weights)
     optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
-    print(f'The model has {count_parameters(model):,} trainable parameters')
+    print(f'The model has {model.count_parameters():,} trainable parameters')
     criterion = nn.CrossEntropyLoss(ignore_index=trg_tok.word2idx[trg_tok.PAD_WORD])
 
     # Tensorboard (it needs some epochs to start working ~10-20)
@@ -238,18 +229,17 @@ def log_progress(epoch_i, start_time, tr_loss, val_loss, tb_writer=None):
     print("------------------------------------------------------------")
     print(f'Epoch: {epoch_i + 1:02} | Time: {epoch_mins}m {epoch_secs}s')
     print(f'\t- Train Loss: {tr_loss:.3f} | Train PPL: {math.exp(tr_loss):7.3f}')
-    print(f'\t- Val Loss: {tr_loss:.3f} | Val PPL: {math.exp(tr_loss):7.3f}')
+    print(f'\t- Val Loss: {val_loss:.3f} | Val PPL: {math.exp(val_loss):7.3f}')
     print("------------------------------------------------------------")
 
     # Tensorboard
     if tb_writer:
         for split in ["train", "val"]:
             for k, v in metrics[split].items():
-                tb_writer.add_scalar(f'{split}_{k.lower()}', v, epoch_i)
+                tb_writer.add_scalar(f'{split}_{k.lower()}', v, epoch_i+1)
                 # wandb.log({f'{split}_{k.lower()}': v})
 
     return metrics
-
 
 
 if __name__ == "__main__":

@@ -6,9 +6,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-import matplotlib.pyplot as plt
-from mt import helpers
-
 
 class PositionalEncoding(nn.Module):
 
@@ -27,27 +24,23 @@ class PositionalEncoding(nn.Module):
         return self.pe[:, :x.size(1), :]
 
 
-class Encoder(nn.Module):
+class EncoderInput(nn.Module):
 
-    def __init__(self, input_dim, d_model, n_layers, n_heads, dff, dropout, max_length):
+    def __init__(self, input_dim, d_model, dropout, max_length, static_pos_emb=True):
         super().__init__()
         self.max_length = max_length
 
         self.tok_embedding = nn.Embedding(input_dim, d_model)  # Vocab => emb
-        self.pos_embedding = PositionalEncoding(d_model, max_length)  # Pos => emb_pos
-        # self.pos_embedding = nn.Embedding(max_length, d_model)  # Pos => emb_pos
-
-        self.layers = nn.ModuleList([EncoderLayer(d_model,
-                                                  n_heads,
-                                                  dff,
-                                                  dropout) for _ in range(n_layers)])
+        if static_pos_emb:
+            self.pos_embedding = PositionalEncoding(d_model, max_length)  # Pos => emb_pos
+        else:
+            self.pos_embedding = nn.Embedding(max_length, d_model)  # This limits decoding length at testing
 
         self.dropout = nn.Dropout(dropout)
         self.scale = math.sqrt(d_model)
 
-    def forward(self, src, src_mask):
-        batch_size = src.shape[0]
-        src_len = src.shape[1]
+    def forward(self, src):
+        batch_size, src_len = src.shape[0], src.shape[1]
         assert src_len <= self.max_length
 
         # # Initial positions: 0,1,2,... for each sample
@@ -55,10 +48,21 @@ class Encoder(nn.Module):
 
         # Mix token embeddings and positional embeddings
         src = self.dropout((self.tok_embedding(src) * self.scale) + self.pos_embedding(pos))  # (B, src_len, d_model)
+        return src
 
+
+class Encoder(nn.Module):
+
+    def __init__(self, d_model, n_layers, n_heads, dff, dropout):
+        super().__init__()
+        self.layers = nn.ModuleList([EncoderLayer(d_model,
+                                                  n_heads,
+                                                  dff,
+                                                  dropout) for _ in range(n_layers)])
+
+    def forward(self, src, src_mask):
         for layer in self.layers:
             src = layer(src, src_mask)  # (B, src_len, d_model)
-
         return src
 
 
@@ -155,42 +159,45 @@ class PositionwiseFeedforwardLayer(nn.Module):
         return x
 
 
-class Decoder(nn.Module):
-    def __init__(self, output_dim, d_model, n_layers, n_heads, dff, dropout, max_length):
+class DecoderInput(nn.Module):
+    def __init__(self, output_dim, d_model, dropout, max_length, static_pos_emb=True):
         super().__init__()
-
         self.max_length = max_length
 
         self.tok_embedding = nn.Embedding(output_dim, d_model)
-        self.pos_embedding = PositionalEncoding(d_model, max_length)  # Pos => emb_pos
-        # self.pos_embedding = nn.Embedding(max_length, d_model)  # This limits decoding length at testing
-
-        self.layers = nn.ModuleList([DecoderLayer(d_model, n_heads, dff, dropout)
-                                     for _ in range(n_layers)])
-
-        self.fc_out = nn.Linear(d_model, output_dim)
+        if static_pos_emb:
+            self.pos_embedding = PositionalEncoding(d_model, max_length)  # Pos => emb_pos
+        else:
+            self.pos_embedding = nn.Embedding(max_length, d_model)  # This limits decoding length at testing
 
         self.dropout = nn.Dropout(dropout)
         self.scale = math.sqrt(d_model)
 
-    def forward(self, trg, enc_src, trg_mask, src_mask):
-        batch_size = trg.shape[0]
-        trg_len = trg.shape[1]
+    def forward(self, trg):
+        batch_size, trg_len = trg.shape[0], trg.shape[1]
         assert trg_len <= self.max_length
 
         # # Initial positions: 0,1,2,... for each sample
         # device = trg.device
-        pos = torch.arange(0, trg_len, device=trg.device).unsqueeze(0).repeat(batch_size, 1)#.to(device)
+        pos = torch.arange(0, trg_len, device=trg.device).unsqueeze(0).repeat(batch_size, 1)
 
         # Mix token embeddings and positional embeddings
         trg = self.dropout((self.tok_embedding(trg) * self.scale) + self.pos_embedding(pos))
+        return trg
 
+
+class Decoder(nn.Module):
+    def __init__(self, d_model, n_layers, n_heads, dff, dropout):
+        super().__init__()
+        self.layers = nn.ModuleList([DecoderLayer(d_model, n_heads, dff, dropout)
+                                     for _ in range(n_layers)])
+
+    def forward(self, trg, enc_src, trg_mask, src_mask):
         attention = None
         for layer in self.layers:
             trg, attention = layer(trg, enc_src, trg_mask, src_mask)
 
-        output = self.fc_out(trg)  # (B, L, d_model) => (B, L, vocab)
-        return output, attention
+        return trg, attention
 
 
 class DecoderLayer(nn.Module):
@@ -231,16 +238,48 @@ class Transformer(nn.Module):
                  enc_heads=8, dec_heads=8,
                  enc_dff_dim=512, dec_dff_dim=512,
                  enc_dropout=0.1, dec_dropout=0.1,
-                 max_src_len=2000, max_trg_len=2000, src_tok=None, trg_tok=None):
+                 max_src_len=2000, max_trg_len=2000,
+                 src_tok=None, trg_tok=None,
+                 static_pos_emb=True):
         super().__init__()
+        # Tokenizers
         self.src_tok = src_tok
         self.trg_tok = trg_tok
 
-        self.max_src_len = self.src_tok.max_length if self.src_tok else max_src_len
-        self.max_trg_len = self.trg_tok.max_length if self.trg_tok else max_trg_len
+        # Define enc/dec input
+        self.enc_input = EncoderInput(self.src_tok.get_vocab_size(),  d_model, enc_dropout, max_src_len, static_pos_emb)
+        self.dec_input = DecoderInput(self.trg_tok.get_vocab_size(),  d_model, enc_dropout, max_trg_len, static_pos_emb)
 
-        self.encoder = Encoder(self.src_tok.get_vocab_size(), d_model, enc_layers, enc_heads, enc_dff_dim, enc_dropout, self.max_src_len)
-        self.decoder = Decoder(self.trg_tok.get_vocab_size(), d_model, dec_layers, dec_heads, dec_dff_dim, dec_dropout, self.max_trg_len)
+        # Transformer (enc/dec)
+        self.encoder = Encoder(d_model, enc_layers, enc_heads, enc_dff_dim, enc_dropout)
+        self.decoder = Decoder(d_model, dec_layers, dec_heads, dec_dff_dim, dec_dropout)
+
+        # Decouple vocabulary from transformer
+        self.fc_out = nn.Linear(d_model, self.trg_tok.get_vocab_size())
+
+        # Initialize
+        self.init_weights()
+
+    def forward(self, src, src_mask, trg, trg_mask):
+        # Process masks
+        src_mask = self.make_src_mask(src_mask)
+        trg_mask = self.make_trg_mask(trg_mask)
+
+        # For debugging
+        # source = self.src_tok.decode(src)
+        # reference = self.trg_tok.decode(trg)
+        # helpers.print_translations(source, reference)
+
+        # Encoder
+        src = self.enc_input(src)
+        enc_src = self.encoder(src, src_mask)
+
+        # Decoder
+        trg = self.dec_input(trg)
+        output, attention = self.decoder(trg, enc_src, trg_mask, src_mask)
+        output = self.fc_out(output)  # (B, L, d_model) => (B, L, vocab)
+
+        return output, attention
 
     def make_src_mask(self, src_mask):
         # Extend dimensions
@@ -259,21 +298,6 @@ class Transformer(nn.Module):
         # This is automatically broadcast (B, 1, 1, L) & (L, L) => (B, 1, L, L)
         trg_mask = trg_mask & trg_tri_mask
         return trg_mask
-
-    def forward(self, src, src_mask, trg, trg_mask):
-        # Process masks
-        src_mask = self.make_src_mask(src_mask)
-        trg_mask = self.make_trg_mask(trg_mask)
-
-        # For debugging
-        # source = self.src_tok.decode(src)
-        # reference = self.trg_tok.decode(trg)
-        # helpers.print_translations(source, reference)
-
-        # Encoder-Decoder
-        enc_src = self.encoder(src, src_mask)
-        output, attention = self.decoder(trg, enc_src, trg_mask, src_mask)
-        return output, attention
 
     def decode_word(self, enc_src, src_mask, trg_indexes):
         # Get predicted words (all)
@@ -333,3 +357,11 @@ class Transformer(nn.Module):
                     final_candidates.append(candidates)
                     break
         return final_candidates
+
+    def count_parameters(self):
+        return sum(p.numel() for p in self.parameters() if p.requires_grad)
+
+    def init_weights(self):
+        for p in self.parameters():
+            if hasattr(p, 'weight') and p.dim() > 1:
+                nn.init.xavier_uniform_(p)
