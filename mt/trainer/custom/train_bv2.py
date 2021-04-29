@@ -13,7 +13,6 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data import DataLoader
-import spacy
 
 import torchtext
 from torchtext.legacy.datasets import Multi30k
@@ -31,8 +30,8 @@ from mt import helpers
 from mt.trainer.datasets import TranslationDataset
 from mt import DATASETS_PATH, DATASET_CLEAN_NAME, DATASET_TOK_NAME, DATASET_LOGS_NAME, DATASET_CHECKPOINT_NAME
 from mt.trainer.models.pytransformer.transformer import TransformerModel
-from mt.trainer.models.optim import  ScheduledOptim
-from mt.trainer.models.pytransformer.transformer_bv import Encoder, Decoder, Seq2Seq
+from mt.trainer.models.optim import ScheduledOptim
+from mt.trainer.models.transformer.transformer import Transformer
 from mt.trainer.tok import word_tokenizer
 
 MODEL_NAME = "transformer_bv"
@@ -40,7 +39,7 @@ MODEL_NAME = "transformer_bv"
 
 MAX_EPOCHS = 50
 LEARNING_RATE = 0.0005 #1e-3
-BATCH_SIZE = 32 #int(32*1.5)
+BATCH_SIZE = 128 #int(32*1.5)
 MAX_TOKENS = int(4096*1.5)
 WARMUP_UPDATES = 4000
 PATIENCE = 10
@@ -107,71 +106,37 @@ def run_experiment(datapath, src, trg, model_name, domain=None):
     # Load dataset
     train_ds = TranslationDataset(os.path.join(datapath, DATASET_CLEAN_NAME), src_tok, trg_tok, "train")
     val_ds = TranslationDataset(os.path.join(datapath, DATASET_CLEAN_NAME), src_tok, trg_tok, "val")
-    train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS, collate_fn=TranslationDataset.collate_fn, pin_memory=True)
+    train_loader = DataLoader(val_ds, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS, collate_fn=TranslationDataset.collate_fn, pin_memory=True)
     val_loader = DataLoader(val_ds, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS, collate_fn=TranslationDataset.collate_fn, pin_memory=True)
 
-    # # Instantiate model #1
-    # model1 = TransformerModel(src_tok=src_tok, trg_tok=trg_tok)
-    # # model1.load_state_dict(torch.load(checkpoint_path))
-    # optimizer1 = ScheduledOptim(
-    #     optim.Adam(model1.parameters(), betas=(0.9, 0.98), eps=1e-09, lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY),
-    #     model1.d_model, WARMUP_UPDATES)
-    # if MULTIGPU and torch.cuda.device_count() > 1:
-    #     print("Let's use", torch.cuda.device_count(), "GPUs!")
-    #     model1 = nn.DataParallel(model1)
-    # model1.to(DEVICE1)
-    # # wandb.watch(model1)
-    #
-    # # Set loss (ignore when the target token is <pad>)
-    # criterion = nn.CrossEntropyLoss(ignore_index=trg_tok.word2idx[trg_tok.PAD_WORD])
-
-    INPUT_DIM = src_tok.get_vocab_size()
-    OUTPUT_DIM = trg_tok.get_vocab_size()
-    HID_DIM = 256
-    ENC_LAYERS = 3
-    DEC_LAYERS = 3
-    ENC_HEADS = 8
-    DEC_HEADS = 8
-    ENC_PF_DIM = 512
-    DEC_PF_DIM = 512
-    ENC_DROPOUT = 0.1
-    DEC_DROPOUT = 0.1
-    enc = Encoder(INPUT_DIM,
-                  HID_DIM,
-                  ENC_LAYERS,
-                  ENC_HEADS,
-                  ENC_PF_DIM,
-                  ENC_DROPOUT,
-                  DEVICE1)
-    dec = Decoder(OUTPUT_DIM,
-                  HID_DIM,
-                  DEC_LAYERS,
-                  DEC_HEADS,
-                  DEC_PF_DIM,
-                  DEC_DROPOUT,
-                  DEVICE1)
-    SRC_PAD_IDX = src_tok.word2idx[src_tok.PAD_WORD]
-    TRG_PAD_IDX = trg_tok.word2idx[trg_tok.PAD_WORD]
-    model1 = Seq2Seq(enc, dec, SRC_PAD_IDX, TRG_PAD_IDX, DEVICE1).to(DEVICE1)
-    model1.apply(initialize_weights)
-    optimizer1 = torch.optim.Adam(model1.parameters(), lr=LEARNING_RATE)
-    print(f'The model has {count_parameters(model1):,} trainable parameters')
-    criterion = nn.CrossEntropyLoss(ignore_index=TRG_PAD_IDX)
+    # Instantiate model #1
+    model = Transformer(d_model=256,
+                        enc_layers=3, dec_layers=3,
+                        enc_heads=8, dec_heads=8,
+                        enc_dff_dim=512, dec_dff_dim=512,
+                        enc_dropout=0.1, dec_dropout=0.1,
+                        max_src_len=2000, max_trg_len=2000,
+                        src_tok=src_tok, trg_tok=trg_tok)
+    model.to(DEVICE1)
+    model.apply(initialize_weights)
+    optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
+    print(f'The model has {count_parameters(model):,} trainable parameters')
+    criterion = nn.CrossEntropyLoss(ignore_index=trg_tok.word2idx[trg_tok.PAD_WORD])
 
     # Tensorboard (it needs some epochs to start working ~10-20)
-    tr_writer = SummaryWriter(os.path.join(datapath, DATASET_LOGS_NAME, f"{model_name}/train"))
-    val_writer = SummaryWriter(os.path.join(datapath, DATASET_LOGS_NAME, f"{model_name}/val"))
+    tb_writer = SummaryWriter(os.path.join(datapath, DATASET_LOGS_NAME, f"{model_name}"))
+    # wandb.watch(model1)
 
     # Train and validate model
-    fit((model1, optimizer1), (None, None), train_loader=train_loader, val_loader=val_loader,
+    fit(model, optimizer, train_loader=train_loader, val_loader=val_loader,
         epochs=MAX_EPOCHS, criterion=criterion,
         checkpoint_path=checkpoint_path,
-        tr_writer=tr_writer, val_writer=val_writer)
+        tb_writer=tb_writer)
 
     print("Done!")
 
 
-def fit(model_opt1, model_opt2, train_loader, val_loader, epochs, criterion, checkpoint_path, tr_writer=None, val_writer=None):
+def fit(model, optimizer, train_loader, val_loader, epochs, criterion, checkpoint_path, tb_writer=None):
     if not checkpoint_path:
         print("[WARNING] Traning without checkpoint path. The model won't be saved.")
 
@@ -181,162 +146,117 @@ def fit(model_opt1, model_opt2, train_loader, val_loader, epochs, criterion, che
         start_time = time.time()
 
         # Train model
-        tr_loss, tr_metrics = train(model_opt1, model_opt2, train_loader, criterion, epoch_i=epoch_i, tb_writer=tr_writer)
+        tr_loss = train(model, optimizer, train_loader, criterion)
 
-        end_time = time.time()
-        epoch_mins, epoch_secs = epoch_time(start_time, end_time)
-        print(f'Epoch: {epoch_i + 1:02} | Time: {epoch_mins}m {epoch_secs}s')
-        print(f'\tTrain Loss: {tr_loss:.3f} | Train PPL: {math.exp(tr_loss):7.3f}')
+        # Evaluate
+        val_loss = evaluate(model, val_loader, criterion)
 
-        # # Evaluate
-        val_loss, val_metrics = evaluate(model_opt1[0], val_loader, criterion, epoch_i=epoch_i, tb_writer=val_writer)
+        # Log progress
+        log_progress(epoch_i, start_time, tr_loss, val_loss)
 
         # Save checkpoint
         if checkpoint_path:
             if val_loss < lowest_val:
-                avg_bleu = 0#sum([x["torch_bleu"] for x in val_metrics]) / len(val_metrics)
-                print(f"New best score! Loss={val_loss} | BLEU={avg_bleu}. (Saving checkpoint...)")
                 last_checkpoint = epoch_i
                 lowest_val = val_loss
-                torch.save(model_opt1[0].state_dict(), checkpoint_path)
-                print("=> Checkpoint saved!")
+                torch.save(model.state_dict(), checkpoint_path)
+                print("\t=> Checkpoint saved!")
 
             else:
                 # Early stop
                 if PATIENCE != -1 and (epoch_i-last_checkpoint) >= PATIENCE:
+                    print(f"****************************************************************")
                     print(f"Early stop. Validation loss didn't improve for {PATIENCE} epochs")
+                    print(f"****************************************************************")
                     break
 
 
-def train(model_opt1, model_opt2, data_loader, criterion, clip=1.0, log_interval=1, epoch_i=None, tb_writer=None):
+def train(model, optimizer, data_loader, criterion, clip=1.0):
     epoch_loss = 0.0
-    all_metrics = []
-    start_time = time.time()
 
-    # Unpack values
-    (model1, optimizer1) = model_opt1
-    (model2, optimizer2) = model_opt2
-
-    model1.train()
-    optimizer1.zero_grad()
-
+    model.train()
+    optimizer.zero_grad()
     for i, batch in tqdm(enumerate(data_loader), total=len(data_loader)):
-        # print(i)
-
         # Get batch data
-        src1, src_mask1, trg1, trg_mask1 = [x.to(DEVICE1) for x in batch]
-        batch_size, src_max_len, trg_max_len = src1.shape[0], src1.shape[1], trg1.shape[1]
-        optimizer1.zero_grad()
-        output, _ = model1(src1, trg1[:, :-1])
-        # output = [batch size, trg len - 1, output dim]
-        # trg = [batch size, trg len]
+        src, src_mask, trg, trg_mask = [x.to(DEVICE1) for x in batch]
+        batch_size, src_max_len, trg_max_len = src.shape[0], src.shape[1], trg.shape[1]
+
+        # Get output
+        optimizer.zero_grad()
+        output, _ = model(src, src_mask, trg[:, :-1], trg_mask[:, :-1])
         output_dim = output.shape[-1]
         output = output.contiguous().view(-1, output_dim)
-        trg1 = trg1[:, 1:].contiguous().view(-1).long()
-        # output = [batch size * trg len - 1, output dim]
-        # trg = [batch size * trg len - 1]
-        loss = criterion(output, trg1)
+        trg = trg[:, 1:].contiguous().view(-1).long()
+
+        # Compute loss
+        loss = criterion(output, trg)
         loss.backward()
-        torch.nn.utils.clip_grad_norm_(model1.parameters(), clip)
-        optimizer1.step()
+        torch.nn.utils.clip_grad_norm_(model.parameters(), clip)
+        optimizer.step()
         epoch_loss += loss.item()
 
-    return epoch_loss / len(data_loader), all_metrics
+    return epoch_loss / len(data_loader)
 
 
-def evaluate(model, data_loader, criterion, log_interval=1, epoch_i=None, tb_writer=None):
+def evaluate(model, data_loader, criterion):
     epoch_loss = 0
 
     model.eval()
     for i, batch in tqdm(enumerate(data_loader), total=len(data_loader)):
         with torch.no_grad():
-            # print(i)
-
             # Get batch data
-            src1, src_mask1, trg1, trg_mask1 = [x.to(DEVICE1) for x in batch]
-            batch_size, src_max_len, trg_max_len = src1.shape[0], src1.shape[1], trg1.shape[1]
+            src, src_mask, trg, trg_mask = [x.to(DEVICE1) for x in batch]
 
-            output, _ = model(src1, trg1[:, :-1])
-
-            # output = [batch size, trg len - 1, output dim]
-            # trg = [batch size, trg len]
-
+            # Get output
+            output, _ = model(src, src_mask, trg[:, :-1], trg_mask[:, :-1])
             output_dim = output.shape[-1]
-
             output = output.contiguous().view(-1, output_dim)
-            trg1 = trg1[:, 1:].contiguous().view(-1)
+            trg = trg[:, 1:].contiguous().view(-1)
 
-            # output = [batch size * trg len - 1, output dim]
-            # trg = [batch size * trg len - 1]
-
-            loss = criterion(output, trg1.long())
-
+            # Compute loss
+            loss = criterion(output, trg.long())
             epoch_loss += loss.item()
 
     return epoch_loss / len(data_loader)
 
 
-def log_progress(prefix, total_loss, epoch_i, batch_i, n_batches, start_time, tb_writer, translations=None):
-    elapsed = time.time() - start_time
-    sec_per_batch = elapsed / batch_i
-    total_minibatches = (epoch_i - 1) * n_batches + batch_i
-
-    # Compute metrics
+def log_progress(epoch_i, start_time, tr_loss, val_loss, tb_writer=None):
     metrics = {
-        "loss": total_loss / batch_i,
-        "ppl": math.exp(total_loss / batch_i),
+        "train": {
+            "train_loss": tr_loss,
+            "train_ppl": math.exp(tr_loss),
+        },
+        "val": {
+            "val_loss": val_loss,
+            "val_ppl": math.exp(val_loss),
+        },
     }
 
-    if translations:
-        src_dec, ref_dec, hyp_dec = translations
-
-        # Compute metrics
-        torch_bleu = torchtext.data.metrics.bleu_score([x.split(" ") for x in hyp_dec], [[x.split(" ")] for x in ref_dec])
-        metrics["torch_bleu"] = torch_bleu
-
-        # hg_bleu = load_metric("bleu").compute(predictions=[x.split(" ") for x in hyp_dec], references=[[x.split(" ")] for x in ref_dec])
-        # metrics["hg_bleu"] = hg_bleu["bleu"]
-        #
-        # hg_sacrebleu = load_metric("sacrebleu").compute(predictions=hyp_dec, references=[[x] for x in ref_dec])
-        # metrics["hg_sacrebleu"] = hg_sacrebleu["score"]
-
-        # metrics["ter"] = 0
-        # metrics["chrf"] = 0
-
     # Print stuff
-    str_metrics = "| ".join(["{}: {:.3f}".format(k, v) for k, v in metrics.items()])
-    print('[{}] | Epoch: #{:<3} | {:>3}/{:} batches | {:.2f} sec/it (est.: {:.2f} min) || {}'.format(
-        prefix.title(), epoch_i, batch_i, n_batches, sec_per_batch, (n_batches-batch_i)*sec_per_batch/60, str_metrics))
+    end_time = time.time()
+    epoch_mins, epoch_secs = helpers.epoch_time(start_time, end_time)
+    print("------------------------------------------------------------")
+    print(f'Epoch: {epoch_i + 1:02} | Time: {epoch_mins}m {epoch_secs}s')
+    print(f'\t- Train Loss: {tr_loss:.3f} | Train PPL: {math.exp(tr_loss):7.3f}')
+    print(f'\t- Val Loss: {tr_loss:.3f} | Val PPL: {math.exp(tr_loss):7.3f}')
+    print("------------------------------------------------------------")
 
     # Tensorboard
     if tb_writer:
-        for k, v in metrics.items():
-            tb_writer.add_scalar(f'{prefix}_{k.lower()}', v, total_minibatches)
-            # wandb.log({f'{prefix}_{k.lower()}': v})
+        for split in ["train", "val"]:
+            for k, v in metrics.items():
+                tb_writer.add_scalar(f'{split}_{k.lower()}', v, epoch_i)
+                # wandb.log({f'{split}_{k.lower()}': v})
 
     return metrics
 
-
-def get_translations(src, trg, trg_pred, src_tok, trg_tok):
-    # Decode tensors
-    src_dec = src_tok.decode(src)
-    ref_dec = trg_tok.decode(trg)
-    hyp_dec = trg_tok.decode(trg_pred)
-    return src_dec, ref_dec, hyp_dec
-
-
-def epoch_time(start_time, end_time):
-    elapsed_time = end_time - start_time
-    elapsed_mins = int(elapsed_time / 60)
-    elapsed_secs = int(elapsed_time - (elapsed_mins * 60))
-    return elapsed_mins, elapsed_secs
 
 
 if __name__ == "__main__":
     # Get all folders in the root path
     #datasets = [os.path.join(DATASETS_PATH, name) for name in os.listdir(DATASETS_PATH) if os.path.isdir(os.path.join(DATASETS_PATH, name))]
-    # datasets = [os.path.join(DATASETS_PATH, "multi30k_de-en")]
-    datasets = [os.path.join(DATASETS_PATH, "health_es-en")]
+    datasets = [os.path.join(DATASETS_PATH, "multi30k_de-en")]
+    # datasets = [os.path.join(DATASETS_PATH, "health_es-en")]
     for dataset in datasets:
         domain, (src, trg) = utils.get_dataset_ids(dataset)
         fname_base = f"{domain}_{src}-{trg}"

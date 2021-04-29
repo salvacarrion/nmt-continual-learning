@@ -34,8 +34,8 @@ class Encoder(nn.Module):
         self.max_length = max_length
 
         self.tok_embedding = nn.Embedding(input_dim, d_model)  # Vocab => emb
-        # self.pos_embedding = PositionalEncoding(d_model, max_length)  # Pos => emb_pos
-        self.pos_embedding = nn.Embedding(max_length, d_model)  # Pos => emb_pos
+        self.pos_embedding = PositionalEncoding(d_model, max_length)  # Pos => emb_pos
+        # self.pos_embedding = nn.Embedding(max_length, d_model)  # Pos => emb_pos
 
         self.layers = nn.ModuleList([EncoderLayer(d_model,
                                                   n_heads,
@@ -162,8 +162,8 @@ class Decoder(nn.Module):
         self.max_length = max_length
 
         self.tok_embedding = nn.Embedding(output_dim, d_model)
-        # self.pos_embedding = PositionalEncoding(d_model, max_length)  # Pos => emb_pos
-        self.pos_embedding = nn.Embedding(max_length, d_model)  # This limits decoding length at testing
+        self.pos_embedding = PositionalEncoding(d_model, max_length)  # Pos => emb_pos
+        # self.pos_embedding = nn.Embedding(max_length, d_model)  # This limits decoding length at testing
 
         self.layers = nn.ModuleList([DecoderLayer(d_model, n_heads, dff, dropout)
                                      for _ in range(n_layers)])

@@ -130,3 +130,18 @@ def generate_translations(model, trg_tok, data_loader, max_length, beam_width):
         y_true += trg_tok.decode(trg)
 
     return y_pred, y_true
+
+
+def get_translations(src, trg, trg_pred, src_tok, trg_tok):
+    # Decode tensors
+    src_dec = src_tok.decode(src)
+    ref_dec = trg_tok.decode(trg)
+    hyp_dec = trg_tok.decode(trg_pred)
+    return src_dec, ref_dec, hyp_dec
+
+
+def epoch_time(start_time, end_time):
+    elapsed_time = end_time - start_time
+    elapsed_mins = int(elapsed_time / 60)
+    elapsed_secs = int(elapsed_time - (elapsed_mins * 60))
+    return elapsed_mins, elapsed_secs
