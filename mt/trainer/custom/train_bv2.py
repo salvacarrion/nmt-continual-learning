@@ -138,7 +138,7 @@ def run_experiment(datapath, src, trg, model_name, domain=None):
 
 def fit(model, optimizer, train_loader, val_loader, epochs, criterion, checkpoint_path, tb_writer=None):
     if not checkpoint_path:
-        print("[WARNING] Traning without checkpoint path. The model won't be saved.")
+        print("[WARNING] Training without a checkpoint path. The model won't be saved.")
 
     lowest_val = 1e9
     last_checkpoint = 0
@@ -152,7 +152,7 @@ def fit(model, optimizer, train_loader, val_loader, epochs, criterion, checkpoin
         val_loss = evaluate(model, val_loader, criterion)
 
         # Log progress
-        log_progress(epoch_i, start_time, tr_loss, val_loss)
+        log_progress(epoch_i, start_time, tr_loss, val_loss, tb_writer)
 
         # Save checkpoint
         if checkpoint_path:
@@ -244,7 +244,7 @@ def log_progress(epoch_i, start_time, tr_loss, val_loss, tb_writer=None):
     # Tensorboard
     if tb_writer:
         for split in ["train", "val"]:
-            for k, v in metrics.items():
+            for k, v in metrics[split].items():
                 tb_writer.add_scalar(f'{split}_{k.lower()}', v, epoch_i)
                 # wandb.log({f'{split}_{k.lower()}': v})
 
