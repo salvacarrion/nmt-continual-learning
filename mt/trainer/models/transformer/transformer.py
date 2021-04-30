@@ -258,7 +258,7 @@ class Transformer(nn.Module):
         self.fc_out = nn.Linear(d_model, self.trg_tok.get_vocab_size())
 
         # Initialize
-        self.init_weights()
+        # self.init_weights()
 
     def forward(self, src, src_mask, trg, trg_mask):
         # Process masks
@@ -361,7 +361,7 @@ class Transformer(nn.Module):
     def count_parameters(self):
         return sum(p.numel() for p in self.parameters() if p.requires_grad)
 
-    def init_weights(self):
-        for p in self.parameters():
-            if hasattr(p, 'weight') and p.dim() > 1:
-                nn.init.xavier_uniform_(p)
+    # def init_weights(self):
+    #     for p in self.parameters():
+    #         if hasattr(p, 'weight') and p.dim() > 1:
+    #             nn.init.xavier_uniform_(p)

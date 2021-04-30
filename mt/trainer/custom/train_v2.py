@@ -136,7 +136,6 @@ def run_experiment(datapath, src, trg, model_name, domain=None):
     # TRG_PAD_IDX = trg_tok.word2idx[trg_tok.PAD_WORD]
     #
     # model = Seq2Seq(enc, dec, SRC_PAD_IDX, TRG_PAD_IDX, DEVICE1).to(DEVICE1)
-    # model.apply(initialize_weights)
     model = Transformer(d_model=256,
                         enc_layers=3, dec_layers=3,
                         enc_heads=8, dec_heads=8,
@@ -145,6 +144,7 @@ def run_experiment(datapath, src, trg, model_name, domain=None):
                         max_src_len=200, max_trg_len=200,
                         src_tok=src_tok, trg_tok=trg_tok,
                         static_pos_emb=False)
+    model.apply(initialize_weights)
     model.to(DEVICE1)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)

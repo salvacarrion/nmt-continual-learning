@@ -32,7 +32,7 @@ class TranslationDataset(Dataset):
         return sample
 
     @staticmethod
-    def collate_fn(batch, max_tokens=4096//2):
+    def collate_fn(batch, max_tokens=40999999999996//2):
         # Enable num_workers to make it fast
 
         # Build src pad tensor
