@@ -21,6 +21,7 @@ from torchtext.legacy.data import Field, BucketIterator
 import torchtext
 import sacrebleu
 from datasets import load_metric
+from torchtext.data.metrics import bleu_score
 
 from tqdm import tqdm
 from collections import Counter
@@ -34,11 +35,13 @@ from mt.trainer.models.optim import ScheduledOptim
 from mt.trainer.models.transformer.transformer import Transformer
 from mt.trainer.tok import word_tokenizer
 
+
 MODEL_NAME = "transformer"
+WANDB_PROJECT = "nmt"  # Run "wandb login" in the terminal
 
 
 MAX_EPOCHS = 50
-LEARNING_RATE = 0.0005 #1e-3
+LEARNING_RATE = 0.5e-3
 BATCH_SIZE = 128 #int(32*1.5)
 MAX_TOKENS = 999999999#int(4096*1.5)
 WARMUP_UPDATES = 4000
@@ -72,26 +75,32 @@ torch.backends.cudnn.benchmark = False
 ###########################################################################
 ###########################################################################
 
-# wandb.init(project='nmt', entity='salvacarrion')
-# config = wandb.config
-# config.tok_folder = tok_folder
-# config.learning_rate = LEARNING_RATE
-# config.batch_size = BATCH_SIZE
-# config.max_epochs = MAX_EPOCHS
-# config.warmup_updates = WARMUP_UPDATES
-# config.patience = PATIENCE
-# config.acc_gradients = ACC_GRADIENTS
-# config.weight_decay = WEIGHT_DECAY
-# config.multigpu = MULTIGPU
-# config.device1 = str(DEVICE1)
-# config.device2 = str(DEVICE2)
+wandb.init(project=WANDB_PROJECT, entity='salvacarrion')
+config = wandb.config
+config.model_name = MODEL_NAME
+config.max_epochs = MAX_EPOCHS
+config.learning_rate = LEARNING_RATE
+config.batch_size = BATCH_SIZE
+config.max_tokens = MAX_TOKENS
+config.warmup_updates = WARMUP_UPDATES
+config.patience = PATIENCE
+config.acc_gradients = ACC_GRADIENTS
+config.weight_decay = WEIGHT_DECAY
+config.multigpu = MULTIGPU
+config.device1 = str(DEVICE1)
+config.device2 = str(DEVICE2)
+config.num_workers = NUM_WORKERS
+config.tok_model = TOK_MODEL
+config.tok_size = TOK_SIZE
+config.tok_folder = TOK_FOLDER
+config.lowercase = LOWERCASE
 
 ###########################################################################
 ###########################################################################
 
 
 def run_experiment(datapath, src, trg, model_name, domain=None):
-    checkpoint_path = os.path.join(datapath, DATASET_CHECKPOINT_NAME, f"{model_name}_{domain}_best.pt")
+    checkpoint_path = os.path.join(datapath, DATASET_CHECKPOINT_NAME, f"{model_name}_{domain}")
 
     # Load tokenizers
     src_tok, trg_tok = helpers.get_tokenizers(os.path.join(datapath, DATASET_TOK_NAME, TOK_FOLDER), src, trg, tok_model=TOK_MODEL, lower=LOWERCASE)
@@ -99,43 +108,10 @@ def run_experiment(datapath, src, trg, model_name, domain=None):
     # Load dataset
     train_ds = TranslationDataset(os.path.join(datapath, DATASET_CLEAN_NAME), src_tok, trg_tok, "train")
     val_ds = TranslationDataset(os.path.join(datapath, DATASET_CLEAN_NAME), src_tok, trg_tok, "val")
-    train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS, collate_fn=TranslationDataset.collate_fn, pin_memory=True)
-    val_loader = DataLoader(val_ds, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS, collate_fn=TranslationDataset.collate_fn, pin_memory=True)
+    train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS, collate_fn=lambda x: TranslationDataset.collate_fn(x, MAX_TOKENS), pin_memory=True)
+    val_loader = DataLoader(val_ds, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS, collate_fn=lambda x: TranslationDataset.collate_fn(x, MAX_TOKENS), pin_memory=True)
 
     # Instantiate model #1
-    # from mt.trainer.models.pytransformer.transformer_bv import Encoder, Decoder, Seq2Seq
-    # INPUT_DIM = src_tok.get_vocab_size()
-    # OUTPUT_DIM = trg_tok.get_vocab_size()
-    # HID_DIM = 256
-    # ENC_LAYERS = 3
-    # DEC_LAYERS = 3
-    # ENC_HEADS = 8
-    # DEC_HEADS = 8
-    # ENC_PF_DIM = 512
-    # DEC_PF_DIM = 512
-    # ENC_DROPOUT = 0.1
-    # DEC_DROPOUT = 0.1
-    #
-    # enc = Encoder(INPUT_DIM,
-    #               HID_DIM,
-    #               ENC_LAYERS,
-    #               ENC_HEADS,
-    #               ENC_PF_DIM,
-    #               ENC_DROPOUT,
-    #               DEVICE1)
-    #
-    # dec = Decoder(OUTPUT_DIM,
-    #               HID_DIM,
-    #               DEC_LAYERS,
-    #               DEC_HEADS,
-    #               DEC_PF_DIM,
-    #               DEC_DROPOUT,
-    #               DEVICE1)
-    #
-    # SRC_PAD_IDX = src_tok.word2idx[src_tok.PAD_WORD]
-    # TRG_PAD_IDX = trg_tok.word2idx[trg_tok.PAD_WORD]
-    #
-    # model = Seq2Seq(enc, dec, SRC_PAD_IDX, TRG_PAD_IDX, DEVICE1).to(DEVICE1)
     model = Transformer(d_model=256,
                         enc_layers=3, dec_layers=3,
                         enc_heads=8, dec_heads=8,
@@ -144,17 +120,15 @@ def run_experiment(datapath, src, trg, model_name, domain=None):
                         max_src_len=200, max_trg_len=200,
                         src_tok=src_tok, trg_tok=trg_tok,
                         static_pos_emb=False)
-    model.apply(initialize_weights)
     model.to(DEVICE1)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
-    print(f'The model has {count_parameters(model):,} trainable parameters')
-    # print(f'The model has {model.count_parameters():,} trainable parameters')
+    print(f'The model has {model.count_parameters():,} trainable parameters')
     criterion = nn.CrossEntropyLoss(ignore_index=trg_tok.word2idx[trg_tok.PAD_WORD])
 
     # Tensorboard (it needs some epochs to start working ~10-20)
     tb_writer = SummaryWriter(os.path.join(datapath, DATASET_LOGS_NAME, f"{model_name}"))
-    # wandb.watch(model1)
+    wandb.watch(model)
 
     # Train and validate model
     fit(model, optimizer, train_loader=train_loader, val_loader=val_loader,
@@ -164,20 +138,14 @@ def run_experiment(datapath, src, trg, model_name, domain=None):
 
     print("Done!")
 
-def count_parameters(model):
-    return sum(p.numel() for p in model.parameters() if p.requires_grad)
-
-
-def initialize_weights(m):
-    if hasattr(m, 'weight') and m.weight.dim() > 1:
-        nn.init.xavier_uniform_(m.weight.data)
 
 def fit(model, optimizer, train_loader, val_loader, epochs, criterion, checkpoint_path, tb_writer=None):
     if not checkpoint_path:
         print("[WARNING] Training without a checkpoint path. The model won't be saved.")
 
-    lowest_val = 1e9
+    val_score_best = 1e9
     last_checkpoint = 0
+    total_checkpoints = 0
     for epoch_i in range(epochs):
         start_time = time.time()
 
@@ -185,25 +153,27 @@ def fit(model, optimizer, train_loader, val_loader, epochs, criterion, checkpoin
         tr_loss = train(model, optimizer, train_loader, criterion)
 
         # Evaluate
-        val_loss = evaluate(model, val_loader, criterion)
+        val_loss, translations = evaluate(model, val_loader, criterion)
 
         # Log progress
-        log_progress(epoch_i, start_time, tr_loss, val_loss, tb_writer)
+        metrics = log_progress(epoch_i, start_time, tr_loss, val_loss, translations, tb_writer)
 
         # Save checkpoint
         if checkpoint_path:
-            if val_loss < lowest_val:
+            val_score = metrics["val"]["bleu"]
+            if val_score < val_score_best:
                 last_checkpoint = epoch_i
-                lowest_val = val_loss
-                torch.save(model.state_dict(), checkpoint_path)
+                val_score_best = val_score
+                total_checkpoints += 1
+                torch.save(model.state_dict(), checkpoint_path + "_best.pt")
                 print("\t=> Checkpoint saved!")
 
             else:
                 # Early stop
                 if PATIENCE != -1 and (epoch_i-last_checkpoint) >= PATIENCE:
-                    print(f"****************************************************************")
-                    print(f"Early stop. Validation loss didn't improve for {PATIENCE} epochs")
-                    print(f"****************************************************************")
+                    print(f"************************************************************************")
+                    print(f"*** Early stop. Validation loss didn't improve for {PATIENCE} epochs ***")
+                    print(f"************************************************************************")
                     break
 
 
@@ -237,6 +207,7 @@ def train(model, optimizer, data_loader, criterion, clip=1.0):
 
 def evaluate(model, data_loader, criterion):
     epoch_loss = 0
+    srcs, trgs, pred_trgs = [], [], []
 
     model.eval()
     for i, batch in tqdm(enumerate(data_loader), total=len(data_loader)):
@@ -247,36 +218,46 @@ def evaluate(model, data_loader, criterion):
             # Get output
             # output, _ = model(src, trg[:, :-1])
             output, _ = model(src, src_mask, trg[:, :-1], trg_mask[:, :-1])
-            output_dim = output.shape[-1]
-            output = output.contiguous().view(-1, output_dim)
-            trg = trg[:, 1:].contiguous().view(-1)
+            _output = output.contiguous().view(-1, output.shape[-1])
+            _trg = trg[:, 1:].contiguous().view(-1)
 
             # Compute loss
-            loss = criterion(output, trg.long())
+            loss = criterion(_output, _trg.long())
             epoch_loss += loss.item()
 
-    return epoch_loss / len(data_loader)
+            # Generate translations (fast)
+            pred_trgs += model.trg_tok.decode(output.argmax(2))
+            trgs += model.trg_tok.decode(trg)
+            srcs += model.src_tok.decode(src)
+
+    return epoch_loss / len(data_loader), (srcs, trgs, pred_trgs)
 
 
-def log_progress(epoch_i, start_time, tr_loss, val_loss, tb_writer=None):
+def log_progress(epoch_i, start_time, tr_loss, val_loss, translations=None, tb_writer=None):
     metrics = {
         "train": {
-            "train_loss": tr_loss,
-            "train_ppl": math.exp(tr_loss),
+            "loss": tr_loss,
+            "ppl": math.exp(tr_loss),
         },
         "val": {
-            "val_loss": val_loss,
-            "val_ppl": math.exp(val_loss),
+            "loss": val_loss,
+            "ppl": math.exp(val_loss),
         },
     }
+
+    # Get additional metrics
+    if translations:
+        src_dec_all, hyp_dec_all, ref_dec_all = translations
+        m_bleu_score = bleu_score([x.split(" ") for x in hyp_dec_all], [[x.split(" ")] for x in ref_dec_all])
+        metrics["val"]["bleu"] = m_bleu_score
 
     # Print stuff
     end_time = time.time()
     epoch_mins, epoch_secs = helpers.epoch_time(start_time, end_time)
     print("------------------------------------------------------------")
     print(f'Epoch: {epoch_i + 1:02} | Time: {epoch_mins}m {epoch_secs}s')
-    print(f'\t- Train Loss: {tr_loss:.3f} | Train PPL: {math.exp(tr_loss):7.3f}')
-    print(f'\t- Val Loss: {val_loss:.3f} | Val PPL: {math.exp(val_loss):7.3f}')
+    print(f'\t- Train Loss: {metrics["train"]["loss"]:.3f} | Train PPL: {metrics["train"]["ppl"]:.3f}')
+    print(f'\t- Val Loss: {metrics["val"]["loss"]:.3f} | Val PPL: {metrics["val"]["ppl"]:.3f} | Val BLEU: {metrics["val"]["bleu"]*100:.3f}')
     print("------------------------------------------------------------")
 
     # Tensorboard
@@ -284,7 +265,7 @@ def log_progress(epoch_i, start_time, tr_loss, val_loss, tb_writer=None):
         for split in ["train", "val"]:
             for k, v in metrics[split].items():
                 tb_writer.add_scalar(f'{split}_{k.lower()}', v, epoch_i+1)
-                # wandb.log({f'{split}_{k.lower()}': v})
+                wandb.log({f'{split}_{k.lower()}': v})
 
     return metrics
 

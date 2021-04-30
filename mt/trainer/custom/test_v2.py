@@ -35,16 +35,26 @@ from mt.trainer.models.optim import ScheduledOptim
 from mt.trainer.models.transformer.transformer import Transformer
 from mt.trainer.tok import word_tokenizer
 
+
 MODEL_NAME = "transformer"
 
+
+MAX_EPOCHS = 50
+LEARNING_RATE = 0.5e-3
 BATCH_SIZE = 128 #int(32*1.5)
-MAX_TOKENS = int(4096*1.5)
+MAX_TOKENS = 999999999#int(4096*1.5)
+WARMUP_UPDATES = 4000
+PATIENCE = 10
+ACC_GRADIENTS = 1
+WEIGHT_DECAY = 0.0001
+MULTIGPU = False
 DEVICE1 = torch.device("cuda" if torch.cuda.is_available() else "cpu")  # torch.device("cpu") #
 DEVICE2 = None  #torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 NUM_WORKERS = 0
-TOK_MODEL = "wt" #"wt"
+TOK_MODEL = "wt"
 TOK_SIZE = 16000
 TOK_FOLDER = f"{TOK_MODEL}.{TOK_SIZE}"
+LOWERCASE = True
 
 print(f"Device #1: {DEVICE1}")
 print(f"Device #2: {DEVICE2}")
@@ -63,14 +73,14 @@ torch.backends.cudnn.benchmark = False
 
 
 def run_experiment(datapath, src, trg, model_name, domain=None):
-    checkpoint_path = os.path.join(datapath, DATASET_CHECKPOINT_NAME, f"{model_name}_{domain}_best.pt")
+    checkpoint_path = os.path.join(datapath, DATASET_CHECKPOINT_NAME, f"{model_name}_{domain}_best.pt.bak")
 
     # Load tokenizers
-    src_tok, trg_tok = helpers.get_tokenizers(os.path.join(datapath, DATASET_TOK_NAME, TOK_FOLDER), src, trg, tok_model=TOK_MODEL)
+    src_tok, trg_tok = helpers.get_tokenizers(os.path.join(datapath, DATASET_TOK_NAME, TOK_FOLDER), src, trg, tok_model=TOK_MODEL, lower=LOWERCASE)
 
     # Load dataset
-    test_ds = TranslationDataset(os.path.join(datapath, DATASET_CLEAN_NAME), src_tok, trg_tok, "test")
-    test_loader = DataLoader(test_ds, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS, collate_fn=TranslationDataset.collate_fn, pin_memory=True)
+    test_ds = TranslationDataset(os.path.join(datapath, DATASET_CLEAN_NAME), src_tok, trg_tok, "val")
+    test_loader = DataLoader(test_ds, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS, collate_fn=lambda x: TranslationDataset.collate_fn(x, MAX_TOKENS), pin_memory=True)
 
     # Instantiate model #1
     model = Transformer(d_model=256,
@@ -78,7 +88,7 @@ def run_experiment(datapath, src, trg, model_name, domain=None):
                         enc_heads=8, dec_heads=8,
                         enc_dff_dim=512, dec_dff_dim=512,
                         enc_dropout=0.1, dec_dropout=0.1,
-                        max_src_len=2000, max_trg_len=2000,
+                        max_src_len=200, max_trg_len=200,
                         src_tok=src_tok, trg_tok=trg_tok,
                         static_pos_emb=False)
     model.to(DEVICE1)
@@ -98,6 +108,13 @@ def run_experiment(datapath, src, trg, model_name, domain=None):
     # Get translations
     src_dec_all, hyp_dec_all, ref_dec_all = get_translations(model, test_loader, src_tok, trg_tok)
 
+    # Print translations
+    helpers.print_translations(hyp_dec_all, ref_dec_all, src_dec_all, limit=50)
+
+    # Compute scores
+    m_bleu_score = bleu_score([x.split(" ") for x in hyp_dec_all], [[x.split(" ")] for x in ref_dec_all])
+    print(f'BLEU score = {m_bleu_score*100:.2f}')
+
     # Create path
     eval_name = domain
     eval_path = os.path.join(datapath, DATASET_EVAL_NAME, eval_name)
@@ -111,9 +128,6 @@ def run_experiment(datapath, src, trg, model_name, domain=None):
     with open(os.path.join(eval_path, 'ref.txt'), 'w') as f:
         f.writelines("%s\n" % s for s in ref_dec_all)
     print("Translations written!")
-
-    m_bleu_score = bleu_score([x.split(" ") for x in hyp_dec_all], [[x.split(" ")] for x in ref_dec_all])
-    print(f'BLEU score = {m_bleu_score*100:.2f}')
 
 
 def evaluate(model, data_loader, criterion):
@@ -158,9 +172,7 @@ def log_progress(start_time, val_loss):
 
 
 def get_translations(model, data_loader, src_tok, trg_tok, max_len=100):
-    srcs = []
-    trgs = []
-    pred_trgs = []
+    srcs, trgs, pred_trgs = [], [], []
 
     model.eval()
     for i, batch in tqdm(enumerate(data_loader), total=len(data_loader)):
