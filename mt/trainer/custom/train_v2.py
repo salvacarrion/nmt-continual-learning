@@ -34,11 +34,11 @@ from mt.trainer.models.optim import ScheduledOptim
 from mt.trainer.models.transformer.transformer import Transformer
 from mt.trainer.tok import word_tokenizer
 
-MODEL_NAME = "transformer_bv"
+MODEL_NAME = "transformer"
 
 
 MAX_EPOCHS = 50
-LEARNING_RATE = 1e-3
+LEARNING_RATE = 0.0005 #1e-3
 BATCH_SIZE = 128 #int(32*1.5)
 MAX_TOKENS = int(4096*1.5)
 WARMUP_UPDATES = 4000
@@ -49,8 +49,9 @@ MULTIGPU = False
 DEVICE1 = torch.device("cuda" if torch.cuda.is_available() else "cpu")  # torch.device("cpu") #
 DEVICE2 = None  #torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 NUM_WORKERS = 0
-TOK_MODEL = "wt" #"fastbpe"
-TOK_FOLDER = "wt.16000" #"bpe.16000"
+TOK_MODEL = "wt"
+TOK_SIZE = 16000
+TOK_FOLDER = f"{TOK_MODEL}.{TOK_SIZE}"
 
 print(f"Device #1: {DEVICE1}")
 print(f"Device #2: {DEVICE2}")
@@ -108,7 +109,7 @@ def run_experiment(datapath, src, trg, model_name, domain=None):
                         enc_dropout=0.1, dec_dropout=0.1,
                         max_src_len=2000, max_trg_len=2000,
                         src_tok=src_tok, trg_tok=trg_tok,
-                        static_pos_emb=True)
+                        static_pos_emb=False)
     model.to(DEVICE1)
     optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
     print(f'The model has {model.count_parameters():,} trainable parameters')

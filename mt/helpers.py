@@ -12,9 +12,9 @@ from trainer.tok.fastbpe_tokenizer import FastBPETokenizer
 from tqdm import tqdm
 
 
-def get_tokenizers(datapath, src, trg, tok_model="fastbpe"):
+def get_tokenizers(datapath, src, trg, tok_model="bpe"):
     # Define Tokenizer
-    if tok_model == "fastbpe":
+    if tok_model == "bpe":
         src_tok = FastBPETokenizer(padding=False, truncation=True, max_length=200, lang=src)
         trg_tok = FastBPETokenizer(padding=False, truncation=True, max_length=200, lang=trg)
 

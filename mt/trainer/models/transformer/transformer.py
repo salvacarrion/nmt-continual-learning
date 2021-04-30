@@ -247,8 +247,8 @@ class Transformer(nn.Module):
         self.trg_tok = trg_tok
 
         # Define enc/dec input
-        self.enc_input = EncoderInput(self.src_tok.get_vocab_size(),  d_model, enc_dropout, max_src_len, static_pos_emb)
-        self.dec_input = DecoderInput(self.trg_tok.get_vocab_size(),  d_model, enc_dropout, max_trg_len, static_pos_emb)
+        self.enc_input = EncoderInput(self.src_tok.get_vocab_size(), d_model, enc_dropout, max_src_len, static_pos_emb)
+        self.dec_input = DecoderInput(self.trg_tok.get_vocab_size(), d_model, dec_dropout, max_trg_len, static_pos_emb)
 
         # Transformer (enc/dec)
         self.encoder = Encoder(d_model, enc_layers, enc_heads, enc_dff_dim, enc_dropout)
@@ -299,64 +299,64 @@ class Transformer(nn.Module):
         trg_mask = trg_mask & trg_tri_mask
         return trg_mask
 
-    def decode_word(self, enc_src, src_mask, trg_indexes):
-        # Get predicted words (all)
-        trg_tensor = torch.tensor(trg_indexes, dtype=torch.int, device=enc_src.device).unsqueeze(0)  # (1, 1->L)
-        trg_mask = self.make_trg_mask(trg_tensor)  # (B, n_heads, L, L)
-
-        with torch.no_grad():
-            # Inputs: source + current translation
-            output, last_attention = self.decoder(trg_tensor, enc_src, trg_mask, src_mask)  # (B, L, vocab), (B, nheads, L_enc, L_dec)
-
-        # Find top k words from the output vocabulary
-        return output, last_attention
-
-    def translate_batch(self, src, src_mask, sos_idx, eos_idx, max_length=150, beam_width=3):
-        # Build source mask
-        src_mask = self.make_src_mask(src_mask)
-
-        # Run encoder
-        with torch.no_grad():
-            enc_src = self.encoder(src, src_mask)
-
-        # Set fist word (<sos>)
-        batch_size = len(src)
-        final_candidates = []
-        for i in range(batch_size):  # Samples to translate
-            candidates = [([sos_idx], 0.0)]  # (ids, probability (unnormalized))
-
-            while True:
-                # Expand each candidate
-                tmp_candidates = []
-                modified = False
-                for idxs, score in candidates:
-                    # Check if the EOS has been reached, or the maximum length exceeded
-                    if idxs[-1] == eos_idx or len(idxs) >= max_length:
-                        continue
-                    else:
-                        modified = True
-
-                    # Get next word probabilities (the decoder returns one output per target-input)
-                    next_logits, _ = self.decode_word(enc_src[i].unsqueeze(0), src_mask[i].unsqueeze(0), idxs)
-                    next_logits = next_logits.squeeze(0)[-1]  # Ignore batch (Batch always 1); and get last word
-
-                    # Get top k indexes (by score) to reduce the memory consumption
-                    new_scores = score + F.log_softmax(next_logits)  # Previous score + new
-                    top_idxs_i = torch.argsort(new_scores, descending=True)[:beam_width]  # tmp
-
-                    # Add new candidates
-                    new_candidates = [(idxs + [int(idx)], float(new_scores[int(idx)])) for idx in top_idxs_i]
-                    tmp_candidates += new_candidates
-
-                # Check if there has been any change
-                if modified:
-                    # Normalize probabilities, sort in descending order and select top k
-                    candidates = sorted(tmp_candidates, key=lambda x: x[1]/len(x[0]), reverse=True)
-                    candidates = candidates[:beam_width]
-                else:
-                    final_candidates.append(candidates)
-                    break
-        return final_candidates
+    # def decode_word(self, enc_src, src_mask, trg_indexes):
+    #     # Get predicted words (all)
+    #     trg_tensor = torch.tensor(trg_indexes, dtype=torch.int, device=enc_src.device).unsqueeze(0)  # (1, 1->L)
+    #     trg_mask = self.make_trg_mask(trg_tensor)  # (B, n_heads, L, L)
+    #
+    #     with torch.no_grad():
+    #         # Inputs: source + current translation
+    #         output, last_attention = self.decoder(trg_tensor, enc_src, trg_mask, src_mask)  # (B, L, vocab), (B, nheads, L_enc, L_dec)
+    #
+    #     # Find top k words from the output vocabulary
+    #     return output, last_attention
+    #
+    # def translate_batch(self, src, src_mask, sos_idx, eos_idx, max_length=150, beam_width=3):
+    #     # Build source mask
+    #     src_mask = self.make_src_mask(src_mask)
+    #
+    #     # Run encoder
+    #     with torch.no_grad():
+    #         enc_src = self.encoder(src, src_mask)
+    #
+    #     # Set fist word (<sos>)
+    #     batch_size = len(src)
+    #     final_candidates = []
+    #     for i in range(batch_size):  # Samples to translate
+    #         candidates = [([sos_idx], 0.0)]  # (ids, probability (unnormalized))
+    #
+    #         while True:
+    #             # Expand each candidate
+    #             tmp_candidates = []
+    #             modified = False
+    #             for idxs, score in candidates:
+    #                 # Check if the EOS has been reached, or the maximum length exceeded
+    #                 if idxs[-1] == eos_idx or len(idxs) >= max_length:
+    #                     continue
+    #                 else:
+    #                     modified = True
+    #
+    #                 # Get next word probabilities (the decoder returns one output per target-input)
+    #                 next_logits, _ = self.decode_word(enc_src[i].unsqueeze(0), src_mask[i].unsqueeze(0), idxs)
+    #                 next_logits = next_logits.squeeze(0)[-1]  # Ignore batch (Batch always 1); and get last word
+    #
+    #                 # Get top k indexes (by score) to reduce the memory consumption
+    #                 new_scores = score + F.log_softmax(next_logits)  # Previous score + new
+    #                 top_idxs_i = torch.argsort(new_scores, descending=True)[:beam_width]  # tmp
+    #
+    #                 # Add new candidates
+    #                 new_candidates = [(idxs + [int(idx)], float(new_scores[int(idx)])) for idx in top_idxs_i]
+    #                 tmp_candidates += new_candidates
+    #
+    #             # Check if there has been any change
+    #             if modified:
+    #                 # Normalize probabilities, sort in descending order and select top k
+    #                 candidates = sorted(tmp_candidates, key=lambda x: x[1]/len(x[0]), reverse=True)
+    #                 candidates = candidates[:beam_width]
+    #             else:
+    #                 final_candidates.append(candidates)
+    #                 break
+    #     return final_candidates
 
     def count_parameters(self):
         return sum(p.numel() for p in self.parameters() if p.requires_grad)
