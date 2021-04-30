@@ -12,11 +12,11 @@ from trainer.tok.fastbpe_tokenizer import FastBPETokenizer
 from tqdm import tqdm
 
 
-def get_tokenizers(datapath, src, trg, tok_model="bpe"):
+def get_tokenizers(datapath, src, trg, tok_model="bpe", padding=False, truncation=True, max_length=2000, lower=False):
     # Define Tokenizer
     if tok_model == "bpe":
-        src_tok = FastBPETokenizer(padding=False, truncation=True, max_length=200, lang=src)
-        trg_tok = FastBPETokenizer(padding=False, truncation=True, max_length=200, lang=trg)
+        src_tok = FastBPETokenizer(padding=padding, truncation=truncation, max_length=max_length, lower=lower, lang=src)
+        trg_tok = FastBPETokenizer(padding=padding, truncation=truncation, max_length=max_length, lower=lower, lang=trg)
 
         # Load vocab
         src_tok.load_vocab(os.path.join(datapath, f"codes.{src}"), os.path.join(datapath, f"vocab.{src}"))
@@ -24,8 +24,8 @@ def get_tokenizers(datapath, src, trg, tok_model="bpe"):
 
     elif tok_model == "wt":
         # Do not use padding here. Datasets are preprocessed before batching
-        src_tok = WordTokenizer(padding=False, truncation=False, max_length=5000, lang=src)
-        trg_tok = WordTokenizer(padding=False, truncation=False, max_length=5000, lang=trg)
+        src_tok = WordTokenizer(padding=padding, truncation=truncation, max_length=max_length, lower=lower, lang=src)
+        trg_tok = WordTokenizer(padding=padding, truncation=truncation, max_length=max_length, lower=lower, lang=trg)
 
         # Load vocab
         src_tok.load_vocab(os.path.join(datapath, f"tok.{src}-vocab.txt"))
@@ -33,8 +33,8 @@ def get_tokenizers(datapath, src, trg, tok_model="bpe"):
 
     elif tok_model == "hft":
         # Do not use padding here. Datasets are preprocessed before batching
-        src_tok = LitTokenizer(padding=False, truncation=False, max_length=5000, lang=src)
-        trg_tok = LitTokenizer(padding=False, truncation=False, max_length=5000, lang=trg)
+        src_tok = LitTokenizer(padding=padding, truncation=truncation, max_length=max_length, lower=lower, lang=src)
+        trg_tok = LitTokenizer(padding=padding, truncation=truncation, max_length=max_length, lower=lower, lang=trg)
 
         # Load vocab
         src_tok.load_vocab(os.path.join(datapath, f"tok.{src}-vocab.json"), os.path.join(datapath, f"tok.{src}-merges.txt"))

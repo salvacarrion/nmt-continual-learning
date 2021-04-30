@@ -59,7 +59,7 @@ def collate_fn(examples, src_tok, trg_tok, max_tokens):
 
 class LitTokenizer:
 
-    def __init__(self, padding=False, truncation=False, max_length=None, lang=None):
+    def __init__(self, padding=False, truncation=False, max_length=None, lower=False, lang=None):
         super().__init__()
         self.UNK_WORD = '[UNK]'
         self.PAD_WORD = '[PAD]'
@@ -70,7 +70,7 @@ class LitTokenizer:
 
         # Define tokenizer
         self.tokenizer = None
-        self.configure_tokenizers(padding, truncation, max_length)
+        self.configure_tokenizers(padding, truncation, max_length, lower)
 
         # Other
         self.lang = lang
@@ -78,7 +78,7 @@ class LitTokenizer:
     def get_vocab_size(self):
         return self.tokenizer.get_vocab_size()
 
-    def configure_tokenizers(self, padding, truncation, max_length):
+    def configure_tokenizers(self, padding, truncation, max_length, lower):
         # Settings
         pad_length = None
         if padding in {True, "longest"}:
@@ -91,10 +91,14 @@ class LitTokenizer:
             raise ValueError("Unknown padding type")
 
         # SRC tokenizer
+        tok_normalizers = [NFD(), Strip()]
+        if lower:
+            tok_normalizers += [Lowercase()]
+
         self.tokenizer = Tokenizer(tok_model())  # unk_token=... not working
         self.tokenizer.add_special_tokens(self.special_tokens)
         self.tokenizer.pre_tokenizer = pre_tokenizers.Sequence([WhitespaceSplit()])
-        self.tokenizer.normalizer = normalizers.Sequence([NFD(), Strip()])  # StripAccents requires NFD
+        self.tokenizer.normalizer = normalizers.Sequence(tok_normalizers)  # StripAccents requires NFD
         self.tokenizer.decoder = tok_decoder()
 
         # Define template (Needed for the sos/eos tokens)

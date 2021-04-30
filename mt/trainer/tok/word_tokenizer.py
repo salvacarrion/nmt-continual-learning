@@ -55,7 +55,7 @@ def collate_fn(examples, src_tok, trg_tok, max_tokens):
 
 class WordTokenizer:
 
-    def __init__(self, padding=False, truncation=False, max_length=None, lang=None):
+    def __init__(self, padding=False, truncation=False, max_length=None, lower=False, lang=None):
         super().__init__()
         self.SOS_WORD = '[SOS]'
         self.PAD_WORD = '[PAD]'
@@ -74,6 +74,7 @@ class WordTokenizer:
         self.padding = padding
         self.truncation = truncation
         self.max_length = max_length
+        self.lower = lower
         self.lang = lang
 
     def get_vocab_size(self):
@@ -149,13 +150,13 @@ class WordTokenizer:
     def decode_with_mask(self, x, mask):
         return [[(ii, jj) for ii, jj in zip(i, j)] for i, j in zip(self.decode(x, return_str=False, remove_special_tokens=False), mask.cpu().numpy())]
 
-    def preprocess(self, x, lower=False):
+    def preprocess(self, x, lower):
         if lower:
             x = x.lower()
         return x.split(' ')
 
     def encode_sample(self, x, mask_eos=False):
-        tokens = [w if w in self.word2idx else self.UNK_WORD for w in self.preprocess(x)]
+        tokens = [w if w in self.word2idx else self.UNK_WORD for w in self.preprocess(x, lower=self.lower)]
         tokens = tokens[:(self.max_length-2)] if self.truncation else tokens  # Trucante two extra due to sos/eos
         tokens = [self.SOS_WORD] + tokens + [self.EOS_WORD]
 
