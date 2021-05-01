@@ -42,8 +42,8 @@ WANDB_PROJECT = "nmt"  # Run "wandb login" in the terminal
 
 MAX_EPOCHS = 50
 LEARNING_RATE = 0.5e-3
-BATCH_SIZE = 32 #int(32*1.5)
-MAX_TOKENS = 999999999#int(4096*1.5)
+BATCH_SIZE = 64 #int(32*1.5)
+MAX_TOKENS = 4096 #int(4096*1.5)
 WARMUP_UPDATES = 4000
 PATIENCE = 10
 ACC_GRADIENTS = 1
@@ -151,31 +151,34 @@ def fit(model, optimizer, train_loader, val_loader, epochs, criterion, checkpoin
         start_time = time.time()
 
         # Train model
-        tr_loss = train(model, optimizer, train_loader, criterion)
+        try:
+            tr_loss = train(model, optimizer, train_loader, criterion)
 
-        # Evaluate
-        val_loss, translations = evaluate(model, val_loader, criterion)
+            # Evaluate
+            val_loss, translations = evaluate(model, val_loader, criterion)
 
-        # Log progress
-        metrics = log_progress(epoch_i, start_time, tr_loss, val_loss, translations, tb_writer)
+            # Log progress
+            metrics = log_progress(epoch_i, start_time, tr_loss, val_loss, translations, tb_writer)
 
-        # Save checkpoint
-        if checkpoint_path:
-            val_score = metrics["val"]["bleu"]
-            if val_score > val_score_best:  # Loss <; BLEU >
-                last_checkpoint = epoch_i
-                val_score_best = val_score
-                total_checkpoints += 1
-                torch.save(model.state_dict(), checkpoint_path + "_best.pt")
-                print("\t=> Checkpoint saved!")
+            # Save checkpoint
+            if checkpoint_path:
+                val_score = metrics["val"]["bleu"]
+                if val_score > val_score_best:  # Loss <; BLEU >
+                    last_checkpoint = epoch_i
+                    val_score_best = val_score
+                    total_checkpoints += 1
+                    torch.save(model.state_dict(), checkpoint_path + "_best.pt")
+                    print("\t=> Checkpoint saved!")
 
-            else:
-                # Early stop
-                if PATIENCE != -1 and (epoch_i-last_checkpoint) >= PATIENCE:
-                    print(f"************************************************************************")
-                    print(f"*** Early stop. Validation loss didn't improve for {PATIENCE} epochs ***")
-                    print(f"************************************************************************")
-                    break
+                else:
+                    # Early stop
+                    if PATIENCE != -1 and (epoch_i - last_checkpoint) >= PATIENCE:
+                        print(f"************************************************************************")
+                        print(f"*** Early stop. Validation loss didn't improve for {PATIENCE} epochs ***")
+                        print(f"************************************************************************")
+                        break
+        except RuntimeError as e:
+            print(e)
 
 
 def train(model, optimizer, data_loader, criterion, clip=1.0):
