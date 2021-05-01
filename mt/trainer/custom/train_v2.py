@@ -42,7 +42,7 @@ WANDB_PROJECT = "nmt"  # Run "wandb login" in the terminal
 
 MAX_EPOCHS = 50
 LEARNING_RATE = 0.5e-3
-BATCH_SIZE = 64 #int(32*1.5)
+BATCH_SIZE = 32 #int(32*1.5)
 MAX_TOKENS = 999999999#int(4096*1.5)
 WARMUP_UPDATES = 4000
 PATIENCE = 10
