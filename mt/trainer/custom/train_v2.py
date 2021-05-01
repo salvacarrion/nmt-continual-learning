@@ -42,7 +42,7 @@ WANDB_PROJECT = "nmt"  # Run "wandb login" in the terminal
 
 MAX_EPOCHS = 50
 LEARNING_RATE = 0.5e-3
-BATCH_SIZE = 128 #int(32*1.5)
+BATCH_SIZE = 64 #int(32*1.5)
 MAX_TOKENS = 999999999#int(4096*1.5)
 WARMUP_UPDATES = 4000
 PATIENCE = 10
@@ -52,10 +52,10 @@ MULTIGPU = False
 DEVICE1 = torch.device("cuda" if torch.cuda.is_available() else "cpu")  # torch.device("cpu") #
 DEVICE2 = None  #torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 NUM_WORKERS = 0
-TOK_MODEL = "wt"
+TOK_MODEL = "bpe"
 TOK_SIZE = 16000
 TOK_FOLDER = f"{TOK_MODEL}.{TOK_SIZE}"
-LOWERCASE = True
+LOWERCASE = False
 
 print(f"Device #1: {DEVICE1}")
 print(f"Device #2: {DEVICE2}")
