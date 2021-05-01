@@ -260,7 +260,7 @@ def log_progress(epoch_i, start_time, tr_loss, val_loss, translations=None, tb_w
     if translations:
         src_dec_all, hyp_dec_all, ref_dec_all = translations
         m_bleu_score = bleu_score([x.split(" ") for x in hyp_dec_all], [[x.split(" ")] for x in ref_dec_all])
-        metrics["val"]["bleu"] = m_bleu_score
+        metrics["val"]["bleu"] = m_bleu_score*100
 
         # Print translations
         helpers.print_translations(hyp_dec_all, ref_dec_all, src_dec_all, limit=50)
@@ -271,7 +271,7 @@ def log_progress(epoch_i, start_time, tr_loss, val_loss, translations=None, tb_w
     print("------------------------------------------------------------")
     print(f'Epoch: {epoch_i + 1:02} | Time: {epoch_mins}m {epoch_secs}s')
     print(f'\t- Train Loss: {metrics["train"]["loss"]:.3f} | Train PPL: {metrics["train"]["ppl"]:.3f}')
-    print(f'\t- Val Loss: {metrics["val"]["loss"]:.3f} | Val PPL: {metrics["val"]["ppl"]:.3f} | Val BLEU: {metrics["val"]["bleu"]*100:.3f}')
+    print(f'\t- Val Loss: {metrics["val"]["loss"]:.3f} | Val PPL: {metrics["val"]["ppl"]:.3f} | Val BLEU: {metrics["val"]["bleu"]:.3f}')
     print("------------------------------------------------------------")
 
     # Tensorboard

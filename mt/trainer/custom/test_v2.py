@@ -170,7 +170,7 @@ def log_progress(start_time, val_loss, translations=None):
     if translations:
         src_dec_all, hyp_dec_all, ref_dec_all = translations
         m_bleu_score = bleu_score([x.split(" ") for x in hyp_dec_all], [[x.split(" ")] for x in ref_dec_all])
-        metrics["val"]["bleu"] = m_bleu_score
+        metrics["val"]["bleu"] = m_bleu_score*100
 
         # Print translations
         helpers.print_translations(hyp_dec_all, ref_dec_all, src_dec_all, limit=50)
@@ -180,7 +180,7 @@ def log_progress(start_time, val_loss, translations=None):
     epoch_mins, epoch_secs = helpers.epoch_time(start_time, end_time)
     print("------------------------------------------------------------")
     print(f'Evaluate | Time: {epoch_mins}m {epoch_secs}s')
-    print(f'\t- Val Loss: {metrics["val"]["loss"]:.3f} | Val PPL: {metrics["val"]["ppl"]:.3f} | Val BLEU: {metrics["val"]["bleu"]*100:.3f}')
+    print(f'\t- Val Loss: {metrics["val"]["loss"]:.3f} | Val PPL: {metrics["val"]["ppl"]:.3f} | Val BLEU: {metrics["val"]["bleu"]:.3f}')
     print("------------------------------------------------------------")
 
     return metrics
