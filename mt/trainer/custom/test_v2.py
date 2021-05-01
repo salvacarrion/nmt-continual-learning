@@ -73,13 +73,14 @@ torch.backends.cudnn.benchmark = False
 
 
 def run_experiment(datapath, src, trg, model_name, domain=None):
-    checkpoint_path = os.path.join(datapath, DATASET_CHECKPOINT_NAME, f"{model_name}_{domain}_best.pt.bak")
+    # checkpoint_path = os.path.join(datapath, DATASET_CHECKPOINT_NAME, f"{model_name}_{domain}_best.pt")
+    checkpoint_path = os.path.join(datapath, DATASET_CHECKPOINT_NAME, "transformer_multi30k_best_bleu30.pt")
 
     # Load tokenizers
     src_tok, trg_tok = helpers.get_tokenizers(os.path.join(datapath, DATASET_TOK_NAME, TOK_FOLDER), src, trg, tok_model=TOK_MODEL, lower=LOWERCASE)
 
     # Load dataset
-    test_ds = TranslationDataset(os.path.join(datapath, DATASET_CLEAN_NAME), src_tok, trg_tok, "val")
+    test_ds = TranslationDataset(os.path.join(datapath, DATASET_CLEAN_NAME), src_tok, trg_tok, "test")
     test_loader = DataLoader(test_ds, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS, collate_fn=lambda x: TranslationDataset.collate_fn(x, MAX_TOKENS), pin_memory=True)
 
     # Instantiate model #1
@@ -90,8 +91,7 @@ def run_experiment(datapath, src, trg, model_name, domain=None):
                         enc_dropout=0.1, dec_dropout=0.1,
                         max_src_len=200, max_trg_len=200,
                         src_tok=src_tok, trg_tok=trg_tok,
-                        static_pos_emb=False)
-    model.to(DEVICE1)
+                        static_pos_emb=False).to(DEVICE1)
     print(f'The model has {model.count_parameters():,} trainable parameters')
     criterion = nn.CrossEntropyLoss(ignore_index=trg_tok.word2idx[trg_tok.PAD_WORD])
 
@@ -100,10 +100,10 @@ def run_experiment(datapath, src, trg, model_name, domain=None):
 
     # Evaluate
     start_time = time.time()
-    val_loss = evaluate(model, test_loader, criterion)
+    val_loss, translations = evaluate(model, test_loader, criterion)
 
     # Log progress
-    log_progress(start_time, val_loss)
+    metrics = log_progress(start_time, val_loss, translations)
 
     # Get translations
     src_dec_all, hyp_dec_all, ref_dec_all = get_translations(model, test_loader, src_tok, trg_tok)
@@ -113,7 +113,7 @@ def run_experiment(datapath, src, trg, model_name, domain=None):
 
     # Compute scores
     m_bleu_score = bleu_score([x.split(" ") for x in hyp_dec_all], [[x.split(" ")] for x in ref_dec_all])
-    print(f'BLEU score = {m_bleu_score*100:.2f}')
+    print(f'BLEU score = {m_bleu_score*100:.3f}')
 
     # Create path
     eval_name = domain
@@ -132,6 +132,7 @@ def run_experiment(datapath, src, trg, model_name, domain=None):
 
 def evaluate(model, data_loader, criterion):
     epoch_loss = 0
+    srcs, trgs, pred_trgs = [], [], []
 
     model.eval()
     for i, batch in tqdm(enumerate(data_loader), total=len(data_loader)):
@@ -140,32 +141,43 @@ def evaluate(model, data_loader, criterion):
             src, src_mask, trg, trg_mask = [x.to(DEVICE1) for x in batch]
 
             # Get output
+            # output, _ = model(src, trg[:, :-1])
             output, _ = model(src, src_mask, trg[:, :-1], trg_mask[:, :-1])
-            output_dim = output.shape[-1]
-            output = output.contiguous().view(-1, output_dim)
-            trg = trg[:, 1:].contiguous().view(-1)
+            _output = output.contiguous().view(-1, output.shape[-1])
+            _trg = trg[:, 1:].contiguous().view(-1)
 
             # Compute loss
-            loss = criterion(output, trg.long())
+            loss = criterion(_output, _trg.long())
             epoch_loss += loss.item()
 
-    return epoch_loss / len(data_loader)
+            # Generate translations (fast)
+            pred_trgs += model.trg_tok.decode(output.argmax(2))
+            trgs += model.trg_tok.decode(trg)
+            srcs += model.src_tok.decode(src)
+
+    return epoch_loss / len(data_loader), (srcs, trgs, pred_trgs)
 
 
-def log_progress(start_time, val_loss):
+def log_progress(start_time, val_loss, translations=None):
     metrics = {
         "val": {
-            "val_loss": val_loss,
-            "val_ppl": math.exp(val_loss),
+            "loss": val_loss,
+            "ppl": math.exp(val_loss),
         },
     }
+
+    # Get additional metrics
+    if translations:
+        src_dec_all, hyp_dec_all, ref_dec_all = translations
+        m_bleu_score = bleu_score([x.split(" ") for x in hyp_dec_all], [[x.split(" ")] for x in ref_dec_all])
+        metrics["val"]["bleu"] = m_bleu_score
 
     # Print stuff
     end_time = time.time()
     epoch_mins, epoch_secs = helpers.epoch_time(start_time, end_time)
     print("------------------------------------------------------------")
     print(f'Evaluate | Time: {epoch_mins}m {epoch_secs}s')
-    print(f'\t- Val Loss: {val_loss:.3f} | Val PPL: {math.exp(val_loss):7.3f}')
+    print(f'\t- Val Loss: {metrics["val"]["loss"]:.3f} | Val PPL: {metrics["val"]["ppl"]:.3f} | Val BLEU: {metrics["val"]["bleu"]*100:.3f}')
     print("------------------------------------------------------------")
 
     return metrics

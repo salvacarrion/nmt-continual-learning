@@ -112,19 +112,20 @@ def run_experiment(datapath, src, trg, model_name, domain=None):
     val_loader = DataLoader(val_ds, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS, collate_fn=lambda x: TranslationDataset.collate_fn(x, MAX_TOKENS), pin_memory=True)
 
     # Instantiate model #1
-    model = Transformer(d_model=256,
-                        enc_layers=3, dec_layers=3,
+    model = Transformer(d_model=512,
+                        enc_layers=6, dec_layers=6,
                         enc_heads=8, dec_heads=8,
-                        enc_dff_dim=512, dec_dff_dim=512,
+                        enc_dff_dim=2048, dec_dff_dim=2048,
                         enc_dropout=0.1, dec_dropout=0.1,
-                        max_src_len=200, max_trg_len=200,
+                        max_src_len=2000, max_trg_len=2000,
                         src_tok=src_tok, trg_tok=trg_tok,
-                        static_pos_emb=False)
-    model.to(DEVICE1)
-
-    optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
+                        static_pos_emb=True).to(DEVICE1)
     print(f'The model has {model.count_parameters():,} trainable parameters')
     criterion = nn.CrossEntropyLoss(ignore_index=trg_tok.word2idx[trg_tok.PAD_WORD])
+    optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
+
+    # Load weights
+    #model.load_state_dict(torch.load(checkpoint_path + "_best.pt"))
 
     # Tensorboard (it needs some epochs to start working ~10-20)
     tb_writer = SummaryWriter(os.path.join(datapath, DATASET_LOGS_NAME, f"{model_name}"))
@@ -143,7 +144,7 @@ def fit(model, optimizer, train_loader, val_loader, epochs, criterion, checkpoin
     if not checkpoint_path:
         print("[WARNING] Training without a checkpoint path. The model won't be saved.")
 
-    val_score_best = 1e9
+    val_score_best = -1e9  # Loss 1e9; BLEU -1e9
     last_checkpoint = 0
     total_checkpoints = 0
     for epoch_i in range(epochs):
@@ -161,7 +162,7 @@ def fit(model, optimizer, train_loader, val_loader, epochs, criterion, checkpoin
         # Save checkpoint
         if checkpoint_path:
             val_score = metrics["val"]["bleu"]
-            if val_score < val_score_best:
+            if val_score > val_score_best:  # Loss <; BLEU >
                 last_checkpoint = epoch_i
                 val_score_best = val_score
                 total_checkpoints += 1
@@ -273,7 +274,7 @@ def log_progress(epoch_i, start_time, tr_loss, val_loss, translations=None, tb_w
 if __name__ == "__main__":
     # Get all folders in the root path
     #datasets = [os.path.join(DATASETS_PATH, name) for name in os.listdir(DATASETS_PATH) if os.path.isdir(os.path.join(DATASETS_PATH, name))]
-    datasets = [os.path.join(DATASETS_PATH, "multi30k_de-en")]
+    datasets = [os.path.join(DATASETS_PATH, x) for x in ["health_es-en", "biological_es-en", "merged_es-en"]]
     # datasets = [os.path.join(DATASETS_PATH, "health_es-en")]
     for dataset in datasets:
         domain, (src, trg) = utils.get_dataset_ids(dataset)
