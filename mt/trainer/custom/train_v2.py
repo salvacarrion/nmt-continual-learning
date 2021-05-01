@@ -42,7 +42,7 @@ WANDB_PROJECT = "nmt"  # Run "wandb login" in the terminal
 
 MAX_EPOCHS = 50
 LEARNING_RATE = 0.5e-3
-BATCH_SIZE = 64 #int(32*1.5)
+BATCH_SIZE = 32 #int(32*1.5)
 MAX_TOKENS = 4096 #int(4096*1.5)
 WARMUP_UPDATES = 4000
 PATIENCE = 10
@@ -151,34 +151,32 @@ def fit(model, optimizer, train_loader, val_loader, epochs, criterion, checkpoin
         start_time = time.time()
 
         # Train model
-        try:
-            tr_loss = train(model, optimizer, train_loader, criterion)
+        tr_loss = train(model, optimizer, train_loader, criterion)
 
-            # Evaluate
-            val_loss, translations = evaluate(model, val_loader, criterion)
+        # Evaluate
+        val_loss, translations = evaluate(model, val_loader, criterion)
 
-            # Log progress
-            metrics = log_progress(epoch_i, start_time, tr_loss, val_loss, translations, tb_writer)
+        # Log progress
+        metrics = log_progress(epoch_i, start_time, tr_loss, val_loss, translations, tb_writer)
 
-            # Save checkpoint
-            if checkpoint_path:
-                val_score = metrics["val"]["bleu"]
-                if val_score > val_score_best:  # Loss <; BLEU >
-                    last_checkpoint = epoch_i
-                    val_score_best = val_score
-                    total_checkpoints += 1
-                    torch.save(model.state_dict(), checkpoint_path + "_best.pt")
-                    print("\t=> Checkpoint saved!")
+        # Save checkpoint
+        if checkpoint_path:
+            val_score = metrics["val"]["bleu"]
+            if val_score > val_score_best:  # Loss <; BLEU >
+                last_checkpoint = epoch_i
+                val_score_best = val_score
+                total_checkpoints += 1
+                torch.save(model.state_dict(), checkpoint_path + "_best.pt")
+                print("\t=> Checkpoint saved!")
 
-                else:
-                    # Early stop
-                    if PATIENCE != -1 and (epoch_i - last_checkpoint) >= PATIENCE:
-                        print(f"************************************************************************")
-                        print(f"*** Early stop. Validation loss didn't improve for {PATIENCE} epochs ***")
-                        print(f"************************************************************************")
-                        break
-        except RuntimeError as e:
-            print(e)
+            else:
+                # Early stop
+                if PATIENCE != -1 and (epoch_i - last_checkpoint) >= PATIENCE:
+                    print(f"************************************************************************")
+                    print(f"*** Early stop. Validation loss didn't improve for {PATIENCE} epochs ***")
+                    print(f"************************************************************************")
+                    break
+
 
 
 def train(model, optimizer, data_loader, criterion, clip=1.0):
@@ -187,24 +185,28 @@ def train(model, optimizer, data_loader, criterion, clip=1.0):
     model.train()
     optimizer.zero_grad()
     for i, batch in tqdm(enumerate(data_loader), total=len(data_loader)):
-        # Get batch data
-        src, src_mask, trg, trg_mask = [x.to(DEVICE1) for x in batch]
-        batch_size, src_max_len, trg_max_len = src.shape[0], src.shape[1], trg.shape[1]
+        try:
+            # Get batch data
+            src, src_mask, trg, trg_mask = [x.to(DEVICE1) for x in batch]
+            batch_size, src_max_len, trg_max_len = src.shape[0], src.shape[1], trg.shape[1]
 
-        # Get output
-        optimizer.zero_grad()
-        # output, _ = model(src, trg[:, :-1])
-        output, _ = model(src, src_mask, trg[:, :-1], trg_mask[:, :-1])
-        output_dim = output.shape[-1]
-        output = output.contiguous().view(-1, output_dim)
-        trg = trg[:, 1:].contiguous().view(-1).long()
+            # Get output
+            optimizer.zero_grad()
+            # output, _ = model(src, trg[:, :-1])
+            output, _ = model(src, src_mask, trg[:, :-1], trg_mask[:, :-1])
+            output_dim = output.shape[-1]
+            output = output.contiguous().view(-1, output_dim)
+            trg = trg[:, 1:].contiguous().view(-1).long()
 
-        # Compute loss
-        loss = criterion(output, trg)
-        loss.backward()
-        torch.nn.utils.clip_grad_norm_(model.parameters(), clip)
-        optimizer.step()
-        epoch_loss += loss.item()
+            # Compute loss
+            loss = criterion(output, trg)
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), clip)
+            optimizer.step()
+            epoch_loss += loss.item()
+        except RuntimeError as e:
+            print("ERROR BATCH: " + str(i+1))
+            print(e)
 
     return epoch_loss / len(data_loader)
 
@@ -215,24 +217,28 @@ def evaluate(model, data_loader, criterion):
 
     model.eval()
     for i, batch in tqdm(enumerate(data_loader), total=len(data_loader)):
-        with torch.no_grad():
-            # Get batch data
-            src, src_mask, trg, trg_mask = [x.to(DEVICE1) for x in batch]
+        try:
+            with torch.no_grad():
+                # Get batch data
+                src, src_mask, trg, trg_mask = [x.to(DEVICE1) for x in batch]
 
-            # Get output
-            # output, _ = model(src, trg[:, :-1])
-            output, _ = model(src, src_mask, trg[:, :-1], trg_mask[:, :-1])
-            _output = output.contiguous().view(-1, output.shape[-1])
-            _trg = trg[:, 1:].contiguous().view(-1)
+                # Get output
+                # output, _ = model(src, trg[:, :-1])
+                output, _ = model(src, src_mask, trg[:, :-1], trg_mask[:, :-1])
+                _output = output.contiguous().view(-1, output.shape[-1])
+                _trg = trg[:, 1:].contiguous().view(-1)
 
-            # Compute loss
-            loss = criterion(_output, _trg.long())
-            epoch_loss += loss.item()
+                # Compute loss
+                loss = criterion(_output, _trg.long())
+                epoch_loss += loss.item()
 
-            # Generate translations (fast)
-            pred_trgs += model.trg_tok.decode(output.argmax(2))
-            trgs += model.trg_tok.decode(trg)
-            srcs += model.src_tok.decode(src)
+                # Generate translations (fast)
+                pred_trgs += model.trg_tok.decode(output.argmax(2))
+                trgs += model.trg_tok.decode(trg)
+                srcs += model.src_tok.decode(src)
+        except RuntimeError as e:
+            print("ERROR BATCH: " + str(i+1))
+            print(e)
 
     return epoch_loss / len(data_loader), (srcs, trgs, pred_trgs)
 
