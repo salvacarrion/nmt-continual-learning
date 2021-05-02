@@ -29,7 +29,7 @@ from collections import Counter
 from mt.preprocess import utils
 from mt import helpers
 from mt.trainer.datasets import TranslationDataset
-from mt import DATASETS_PATH, DATASET_CLEAN_NAME, DATASET_TOK_NAME, DATASET_LOGS_NAME, DATASET_CHECKPOINT_NAME
+from mt import DATASETS_PATH, DATASET_CLEAN_NAME, DATASET_CLEAN_SORTED_NAME, DATASET_TOK_NAME, DATASET_LOGS_NAME, DATASET_CHECKPOINT_NAME
 from mt.trainer.models.pytransformer.transformer import TransformerModel
 from mt.trainer.models.optim import ScheduledOptim
 from mt.trainer.models.transformer.transformer import Transformer
@@ -42,8 +42,8 @@ WANDB_PROJECT = "nmt"  # Run "wandb login" in the terminal
 
 MAX_EPOCHS = 50
 LEARNING_RATE = 0.5e-3
-BATCH_SIZE = 32 #int(32*1.5)
-MAX_TOKENS = 4096 #int(4096*1.5)
+BATCH_SIZE = 128 #int(32*1.5)
+MAX_TOKENS = 9999999#4096 #int(4096*1.5)
 WARMUP_UPDATES = 4000
 PATIENCE = 10
 ACC_GRADIENTS = 1
@@ -77,7 +77,7 @@ def run_experiment(datapath, src, trg, model_name, domain=None):
     ###########################################################################
     ###########################################################################
 
-    wandb.init(project=WANDB_PROJECT, entity='salvacarrion')
+    wandb.init(project=WANDB_PROJECT, entity='salvacarrion', reinit=True)
     config = wandb.config
     config.model_name = MODEL_NAME
     config.domain = domain
@@ -107,16 +107,16 @@ def run_experiment(datapath, src, trg, model_name, domain=None):
     src_tok, trg_tok = helpers.get_tokenizers(os.path.join(datapath, DATASET_TOK_NAME, TOK_FOLDER), src, trg, tok_model=TOK_MODEL, lower=LOWERCASE)
 
     # Load dataset
-    train_ds = TranslationDataset(os.path.join(datapath, DATASET_CLEAN_NAME), src_tok, trg_tok, "train")
-    val_ds = TranslationDataset(os.path.join(datapath, DATASET_CLEAN_NAME), src_tok, trg_tok, "val")
-    train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS, collate_fn=lambda x: TranslationDataset.collate_fn(x, MAX_TOKENS), pin_memory=True)
-    val_loader = DataLoader(val_ds, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS, collate_fn=lambda x: TranslationDataset.collate_fn(x, MAX_TOKENS), pin_memory=True)
+    train_ds = TranslationDataset(os.path.join(datapath, DATASET_CLEAN_SORTED_NAME), src_tok, trg_tok, "train")
+    val_ds = TranslationDataset(os.path.join(datapath, DATASET_CLEAN_SORTED_NAME), src_tok, trg_tok, "val")
+    train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS, collate_fn=lambda x: TranslationDataset.collate_fn(x, MAX_TOKENS), pin_memory=True)
+    val_loader = DataLoader(val_ds, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS, collate_fn=lambda x: TranslationDataset.collate_fn(x, MAX_TOKENS), pin_memory=True)
 
     # Instantiate model #1
     model = Transformer(d_model=512//2,
                         enc_layers=6//2, dec_layers=6//2,
                         enc_heads=8, dec_heads=8,
-                        enc_dff_dim=2048//2, dec_dff_dim=2048//2,
+                        enc_dff_dim=2048//4, dec_dff_dim=2048//4,
                         enc_dropout=0.1, dec_dropout=0.1,
                         max_src_len=2000, max_trg_len=2000,
                         src_tok=src_tok, trg_tok=trg_tok,
@@ -286,8 +286,8 @@ def log_progress(epoch_i, start_time, tr_loss, val_loss, translations=None, tb_w
 
 if __name__ == "__main__":
     # Get all folders in the root path
-    datasets = [os.path.join(DATASETS_PATH, x) for x in ["health_es-en", "biological_es-en", "merged_es-en"]]
-    # datasets = [os.path.join(DATASETS_PATH, "multi30k_de-en")]
+    # datasets = [os.path.join(DATASETS_PATH, x) for x in ["health_es-en", "biological_es-en", "merged_es-en"]]
+    datasets = [os.path.join(DATASETS_PATH, "multi30k_de-en")]
     for dataset in datasets:
         domain, (src, trg) = utils.get_dataset_ids(dataset)
         fname_base = f"{domain}_{src}-{trg}"
