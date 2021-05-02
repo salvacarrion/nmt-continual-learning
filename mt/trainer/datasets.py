@@ -52,11 +52,9 @@ class TranslationDataset(Dataset):
             trg[i, :len(x["trg"])] = torch.tensor(x["trg"], dtype=torch.int)
             trg_attention_mask[i, :len(x["trg_attention_mask"])] = torch.tensor(x["trg_attention_mask"], dtype=torch.bool)
 
-        # Limit tokens
+        # Truncate batch if the maximum number of tokens is exceeded
         batch_size, max_len = src.shape
         max_batch = math.floor(max_tokens / max_len)
-
-        # Select indices
         if batch_size > max_batch:
             rnd_idxs = np.random.choice(np.arange(0, max_batch), size=max_batch, replace=False)
             src = src[rnd_idxs]

@@ -52,10 +52,10 @@ MULTIGPU = False
 DEVICE1 = torch.device("cuda" if torch.cuda.is_available() else "cpu")  # torch.device("cpu") #
 DEVICE2 = None  #torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 NUM_WORKERS = 0
-TOK_MODEL = "bpe"
+TOK_MODEL = "wt"
 TOK_SIZE = 16000
 TOK_FOLDER = f"{TOK_MODEL}.{TOK_SIZE}"
-LOWERCASE = False
+LOWERCASE = True
 
 print(f"Device #1: {DEVICE1}")
 print(f"Device #2: {DEVICE2}")
@@ -73,7 +73,7 @@ torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 
 
-def run_experiment(datapath, src, trg, model_name, domain=None):
+def run_experiment(datapath, src, trg, model_name, domain=None, smart_batch=False):
     ###########################################################################
     ###########################################################################
 
@@ -107,20 +107,22 @@ def run_experiment(datapath, src, trg, model_name, domain=None):
     src_tok, trg_tok = helpers.get_tokenizers(os.path.join(datapath, DATASET_TOK_NAME, TOK_FOLDER), src, trg, tok_model=TOK_MODEL, lower=LOWERCASE)
 
     # Load dataset
-    train_ds = TranslationDataset(os.path.join(datapath, DATASET_CLEAN_SORTED_NAME), src_tok, trg_tok, "train")
-    val_ds = TranslationDataset(os.path.join(datapath, DATASET_CLEAN_SORTED_NAME), src_tok, trg_tok, "val")
-    train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS, collate_fn=lambda x: TranslationDataset.collate_fn(x, MAX_TOKENS), pin_memory=True)
+    datapath_clean = DATASET_CLEAN_SORTED_NAME if smart_batch else DATASET_CLEAN_NAME
+    train_ds = TranslationDataset(os.path.join(datapath, datapath_clean), src_tok, trg_tok, "train")
+    val_ds = TranslationDataset(os.path.join(datapath, datapath_clean), src_tok, trg_tok, "val")
+    train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS, collate_fn=lambda x: TranslationDataset.collate_fn(x, MAX_TOKENS), pin_memory=True)
     val_loader = DataLoader(val_ds, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS, collate_fn=lambda x: TranslationDataset.collate_fn(x, MAX_TOKENS), pin_memory=True)
 
     # Instantiate model #1
-    model = Transformer(d_model=512//2,
-                        enc_layers=6//2, dec_layers=6//2,
+    model = Transformer(d_model=256,
+                        enc_layers=3, dec_layers=3,
                         enc_heads=8, dec_heads=8,
-                        enc_dff_dim=2048//4, dec_dff_dim=2048//4,
+                        enc_dff_dim=512, dec_dff_dim=512,
                         enc_dropout=0.1, dec_dropout=0.1,
-                        max_src_len=2000, max_trg_len=2000,
+                        max_src_len=200, max_trg_len=200,
                         src_tok=src_tok, trg_tok=trg_tok,
-                        static_pos_emb=True).to(DEVICE1)
+                        static_pos_emb=False).to(DEVICE1)
+    model.apply(initialize_weights)
     print(f'The model has {model.count_parameters():,} trainable parameters')
     criterion = nn.CrossEntropyLoss(ignore_index=trg_tok.word2idx[trg_tok.PAD_WORD])
     optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
@@ -140,6 +142,9 @@ def run_experiment(datapath, src, trg, model_name, domain=None):
 
     print("Done!")
 
+def initialize_weights(m):
+    if hasattr(m, 'weight') and m.weight.dim() > 1:
+        nn.init.xavier_uniform_(m.weight.data)
 
 def fit(model, optimizer, train_loader, val_loader, epochs, criterion, checkpoint_path, tb_writer=None):
     if not checkpoint_path:
@@ -233,10 +238,9 @@ def evaluate(model, data_loader, criterion):
                 epoch_loss += loss.item()
 
                 # Generate translations (fast)
-
-                hyp_dec_all += model.trg_tok.decode(output.argmax(2))
-                ref_dec_all += model.trg_tok.decode(trg)
-                src_dec_all += model.src_tok.decode(src)
+                hyp_dec_all += model.trg_tok.decode(output.argmax(2), remove_special_tokens=True)
+                ref_dec_all += model.trg_tok.decode(trg, remove_special_tokens=True)
+                src_dec_all += model.src_tok.decode(src, remove_special_tokens=True)
         except RuntimeError as e:
             print("ERROR BATCH: " + str(i+1))
             print(e)

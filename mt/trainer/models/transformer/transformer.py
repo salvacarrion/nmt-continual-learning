@@ -258,7 +258,7 @@ class Transformer(nn.Module):
         self.fc_out = nn.Linear(d_model, self.trg_tok.get_vocab_size())
 
         # Initialize
-        self.apply(initialize_weights)
+        #self.apply(initialize_weights)
 
     def forward(self, src, src_mask, trg, trg_mask):
         # Process masks

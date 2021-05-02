@@ -123,15 +123,25 @@ class FastBPETokenizer:
             x =[x]
         return [x_i.replace("@@ ", "").strip() for x_i in x]
 
-    def decode(self, x, return_str=True, decode_bpe=True, remove_special_tokens=True):
+    def decode(self, x, return_str=True, decode_bpe=True, remove_special_tokens=True, truncate_at_eos=True):
         if isinstance(x, torch.Tensor):
             x = x.detach().cpu().numpy()
 
+        # Decode tokens
+        sentences = [[self.idx2word[idx] for idx in x_i] for x_i in x]
+
+        # Truncate at EOS
+        if truncate_at_eos:
+            for i in range(len(sentences)):
+                try:
+                    pos = sentences[i].index(self.EOS_WORD)
+                    sentences[i] = sentences[i][:pos+1]
+                except ValueError as e:
+                    pass
+
         # Convert ids to words
         if remove_special_tokens:
-            sentences = [[self.idx2word[idx] for idx in x_i if idx not in self._special_tokens_ids_set] for x_i in x]
-        else:
-            sentences = [[self.idx2word[idx] for idx in x_i] for x_i in x]
+            sentences = [[w for w in sent_i if w not in self._special_tokens_set] for sent_i in sentences]
 
         # Return sentences as strings
         if return_str:

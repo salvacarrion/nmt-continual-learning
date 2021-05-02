@@ -63,7 +63,6 @@ class WordTokenizer:
         self.UNK_WORD = '[UNK]'
         self.special_tokens = [self.SOS_WORD, self.PAD_WORD, self.EOS_WORD, self.UNK_WORD]  # Fairseq order
         self._special_tokens_set = set(self.special_tokens)
-        self._special_tokens_ids_set = set(range(len(self.special_tokens)))
 
         # Define tokenizer
         self.word2idx = {}
@@ -83,8 +82,8 @@ class WordTokenizer:
     def load_vocab(self, vocab_path):
         with open(vocab_path, 'r') as f:
             self.wordfreq = [tuple(l.strip().split(' ')) for l in f.readlines()]  # Word + freq
-            self.idx2word = [wf[0] for wf in self.wordfreq]  # Words
-            for idx, word in enumerate(self.special_tokens + self.idx2word, 0):
+            self.idx2word = self.special_tokens + [wf[0] for wf in self.wordfreq]  # Words
+            for idx, word in enumerate(self.idx2word, 0):
                 self.word2idx[word] = idx
 
     def train_vocab(self, train_data, vocab_size=None, min_frequency=3, lower=False):
@@ -130,16 +129,25 @@ class WordTokenizer:
                 padded[k][i] = tmp
         return padded
 
-
-    def decode(self, x, return_str=True, remove_special_tokens=True):
+    def decode(self, x, return_str=True, remove_special_tokens=True, truncate_at_eos=True):
         if isinstance(x, torch.Tensor):
             x = x.detach().cpu().numpy()
 
+        # Decode tokens
+        sentences = [[self.idx2word[idx] for idx in x_i] for x_i in x]
+
+        # Truncate at EOS
+        if truncate_at_eos:
+            for i in range(len(sentences)):
+                try:
+                    pos = sentences[i].index(self.EOS_WORD)
+                    sentences[i] = sentences[i][:pos+1]
+                except ValueError as e:
+                    pass
+
         # Convert ids to words
         if remove_special_tokens:
-            sentences = [[self.idx2word[idx] for idx in x_i if idx not in self._special_tokens_ids_set] for x_i in x]
-        else:
-            sentences = [[self.idx2word[idx] for idx in x_i] for x_i in x]
+            sentences = [[w for w in sent_i if w not in self._special_tokens_set] for sent_i in sentences]
 
         # Return sentences as strings
         if return_str:
