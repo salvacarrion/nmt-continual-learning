@@ -45,7 +45,7 @@ LEARNING_RATE = 0.5e-3
 BATCH_SIZE = 128 #int(32*1.5)
 MAX_TOKENS = 9999999#4096 #int(4096*1.5)
 WARMUP_UPDATES = 4000
-PATIENCE = 10
+PATIENCE = 5
 ACC_GRADIENTS = 1
 WEIGHT_DECAY = 0.0001
 MULTIGPU = False
@@ -142,17 +142,18 @@ def run_experiment(datapath, src, trg, model_name, domain=None, smart_batch=Fals
 
     print("Done!")
 
+
 def initialize_weights(m):
     if hasattr(m, 'weight') and m.weight.dim() > 1:
         nn.init.xavier_uniform_(m.weight.data)
+
 
 def fit(model, optimizer, train_loader, val_loader, epochs, criterion, checkpoint_path, tb_writer=None):
     if not checkpoint_path:
         print("[WARNING] Training without a checkpoint path. The model won't be saved.")
 
-    val_score_best = -1e9  # Loss 1e9; BLEU -1e9
+    best_score = -1e9  # Loss 1e9; BLEU -1e9
     last_checkpoint = 0
-    total_checkpoints = 0
     for epoch_i in range(epochs):
         start_time = time.time()
 
@@ -165,23 +166,32 @@ def fit(model, optimizer, train_loader, val_loader, epochs, criterion, checkpoin
         # Log progress
         metrics = log_progress(epoch_i, start_time, tr_loss, val_loss, translations, tb_writer)
 
-        # Save checkpoint
-        if checkpoint_path:
-            val_score = metrics["val"]["bleu"]
-            if val_score > val_score_best:  # Loss <; BLEU >
-                last_checkpoint = epoch_i
-                val_score_best = val_score
-                total_checkpoints += 1
-                torch.save(model.state_dict(), checkpoint_path + "_best.pt")
-                print("\t=> Checkpoint saved!")
+        # Checkpoint
+        new_best_score = save_checkpoint(model, checkpoint_path, metrics, best_score)
+        last_checkpoint = epoch_i if best_score != new_best_score else last_checkpoint
+        best_score = new_best_score
 
-            else:
-                # Early stop
-                if PATIENCE != -1 and (epoch_i - last_checkpoint) >= PATIENCE:
-                    print(f"************************************************************************")
-                    print(f"*** Early stop. Validation loss didn't improve for {PATIENCE} epochs ***")
-                    print(f"************************************************************************")
-                    break
+        # Early stop
+        if PATIENCE != -1 and (epoch_i - last_checkpoint) >= PATIENCE:
+            print(f"************************************************************************")
+            print(f"*** Early stop. Validation loss didn't improve for {PATIENCE} epochs ***")
+            print(f"************************************************************************")
+            break
+
+
+def save_checkpoint(model, checkpoint_path, metrics, best_score):
+    # Save checkpoint
+    if checkpoint_path:
+        # Save last
+        torch.save(model.state_dict(), checkpoint_path + "_last.pt")
+
+        # Save best BLEU
+        score = metrics["val"]["bleu"]
+        if score > best_score:  # Loss <; BLEU >
+            best_score = score
+            torch.save(model.state_dict(), checkpoint_path + "_best.pt")
+            print("\t=> Checkpoint saved!")
+    return best_score
 
 
 def train(model, optimizer, data_loader, criterion, clip=1.0):

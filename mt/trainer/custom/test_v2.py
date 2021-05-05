@@ -41,7 +41,7 @@ MODEL_NAME = "transformer"
 
 MAX_EPOCHS = 50
 LEARNING_RATE = 0.5e-3
-BATCH_SIZE = 32 #int(32*1.5)
+BATCH_SIZE = 128 #int(32*1.5)
 MAX_TOKENS = 4096  #int(4096*1.5)
 WARMUP_UPDATES = 4000
 PATIENCE = 10
@@ -51,7 +51,7 @@ MULTIGPU = False
 DEVICE1 = torch.device("cuda" if torch.cuda.is_available() else "cpu")  # torch.device("cpu") #
 DEVICE2 = None  #torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 NUM_WORKERS = 0
-TOK_MODEL = "wt"
+TOK_MODEL = "bpe"
 TOK_SIZE = 16000
 TOK_FOLDER = f"{TOK_MODEL}.{TOK_SIZE}"
 LOWERCASE = True
@@ -74,24 +74,24 @@ torch.backends.cudnn.benchmark = False
 
 def run_experiment(datapath, src, trg, model_name, domain=None):
     # checkpoint_path = os.path.join(datapath, DATASET_CHECKPOINT_NAME, f"{model_name}_{domain}_best.pt")
-    checkpoint_path = os.path.join(datapath, DATASET_CHECKPOINT_NAME, "transformer_health_best.pt")
+    checkpoint_path = os.path.join(datapath, DATASET_CHECKPOINT_NAME, "transformer_multi30k_best.pt")
 
     # Load tokenizers
     src_tok, trg_tok = helpers.get_tokenizers(os.path.join(datapath, DATASET_TOK_NAME, TOK_FOLDER), src, trg, tok_model=TOK_MODEL, lower=LOWERCASE)
 
     # Load dataset
-    test_ds = TranslationDataset(os.path.join(datapath, DATASET_CLEAN_NAME), src_tok, trg_tok, "test")
+    test_ds = TranslationDataset(os.path.join(datapath, DATASET_CLEAN_NAME), src_tok, trg_tok, "val")
     test_loader = DataLoader(test_ds, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS, collate_fn=lambda x: TranslationDataset.collate_fn(x, MAX_TOKENS), pin_memory=True)
 
     # Instantiate model #1
-    model = Transformer(d_model=512//2,
-                        enc_layers=6//2, dec_layers=6//2,
+    model = Transformer(d_model=256,
+                        enc_layers=3, dec_layers=3,
                         enc_heads=8, dec_heads=8,
-                        enc_dff_dim=2048//2, dec_dff_dim=2048//2,
+                        enc_dff_dim=512, dec_dff_dim=512,
                         enc_dropout=0.1, dec_dropout=0.1,
-                        max_src_len=2000, max_trg_len=2000,
+                        max_src_len=200, max_trg_len=200,
                         src_tok=src_tok, trg_tok=trg_tok,
-                        static_pos_emb=True).to(DEVICE1)
+                        static_pos_emb=False).to(DEVICE1)
     print(f'The model has {model.count_parameters():,} trainable parameters')
     criterion = nn.CrossEntropyLoss(ignore_index=trg_tok.word2idx[trg_tok.PAD_WORD])
 
@@ -136,24 +136,28 @@ def evaluate(model, data_loader, criterion):
 
     model.eval()
     for i, batch in tqdm(enumerate(data_loader), total=len(data_loader)):
-        with torch.no_grad():
-            # Get batch data
-            src, src_mask, trg, trg_mask = [x.to(DEVICE1) for x in batch]
+        try:
+            with torch.no_grad():
+                # Get batch data
+                src, src_mask, trg, trg_mask = [x.to(DEVICE1) for x in batch]
 
-            # Get output
-            # output, _ = model(src, trg[:, :-1])
-            output, _ = model(src, src_mask, trg[:, :-1], trg_mask[:, :-1])
-            _output = output.contiguous().view(-1, output.shape[-1])
-            _trg = trg[:, 1:].contiguous().view(-1)
+                # Get output
+                # output, _ = model(src, trg[:, :-1])
+                output, _ = model(src, src_mask, trg[:, :-1], trg_mask[:, :-1])
+                _output = output.contiguous().view(-1, output.shape[-1])
+                _trg = trg[:, 1:].contiguous().view(-1)
 
-            # Compute loss
-            loss = criterion(_output, _trg.long())
-            epoch_loss += loss.item()
+                # Compute loss
+                loss = criterion(_output, _trg.long())
+                epoch_loss += loss.item()
 
-            # Generate translations (fast)
-            hyp_dec_all += model.trg_tok.decode(output.argmax(2))
-            ref_dec_all += model.trg_tok.decode(trg)
-            src_dec_all += model.src_tok.decode(src)
+                # Generate translations (fast)
+                hyp_dec_all += model.trg_tok.decode(output.argmax(2), remove_special_tokens=True)
+                ref_dec_all += model.trg_tok.decode(trg, remove_special_tokens=True)
+                src_dec_all += model.src_tok.decode(src, remove_special_tokens=True)
+        except RuntimeError as e:
+            print("ERROR BATCH: " + str(i+1))
+            print(e)
 
     return epoch_loss / len(data_loader), (src_dec_all, hyp_dec_all, ref_dec_all)
 
@@ -280,8 +284,8 @@ def calculate_bleu_alt(iterator, src_field, trg_field, model, device, max_len = 
 
 if __name__ == "__main__":
     # Get all folders in the root path
-    datasets = [os.path.join(DATASETS_PATH, x) for x in ["health_es-en", "biological_es-en", "merged_es-en"]]
-    # datasets = [os.path.join(DATASETS_PATH, "multi30k_de-en")]
+    # datasets = [os.path.join(DATASETS_PATH, x) for x in ["health_es-en", "biological_es-en", "merged_es-en"]]
+    datasets = [os.path.join(DATASETS_PATH, "multi30k_de-en")]
     for dataset in datasets:
         domain, (src, trg) = utils.get_dataset_ids(dataset)
         fname_base = f"{domain}_{src}-{trg}"
