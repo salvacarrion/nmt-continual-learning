@@ -13,7 +13,6 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data import DataLoader
-from torchtext.data.metrics import bleu_score
 
 import torchtext
 from torchtext.legacy.datasets import Multi30k
@@ -93,19 +92,21 @@ def run_experiment(datapath, src, trg, model_name, domain=None):
     criterion = nn.CrossEntropyLoss(ignore_index=trg_tok.word2idx[trg_tok.PAD_WORD])
 
     # Load weights
-    checkpoint_path = os.path.join(datapath, DATASET_CHECKPOINT_NAME, "transformer_multi30k_best_new.pt")
+    checkpoint_path = os.path.join(datapath, DATASET_CHECKPOINT_NAME, "transformer_multi30k_best.pt")
     print(f"Loading weights from: {checkpoint_path}")
     model.load_state_dict(torch.load(checkpoint_path))
 
-    # # Evaluate
-    # start_time = time.time()
-    # val_loss, translations = evaluate(model, test_loader, criterion)
-    #
-    # # Log progress
-    # metrics = log_progress(start_time, val_loss, translations)
-    #
+    # Evaluate
+    start_time = time.time()
+    val_loss, translations = evaluate(model, test_loader, criterion)
+
+    # Log progress
+    metrics = log_progress(start_time, val_loss, translations)
+
     # Get bleu
-    bleu_score = calculate_bleu(test_loader, model)
+    src_dec_all, hyp_dec_all, ref_dec_all = get_translations(test_loader, model)
+
+    bleu_score = torchtext.data.metrics.bleu_score([x.split() for x in hyp_dec_all], [[x.split()] for x in ref_dec_all])
     print(f'BLEU score = {bleu_score * 100:.2f}')
 
     #
@@ -178,7 +179,7 @@ def log_progress(start_time, val_loss, translations=None):
     # Get additional metrics
     if translations:
         src_dec_all, hyp_dec_all, ref_dec_all = translations
-        m_bleu_score = bleu_score([x.split(" ") for x in hyp_dec_all], [[x.split(" ")] for x in ref_dec_all])
+        m_bleu_score = torchtext.data.metrics.bleu_score([x.split(" ") for x in hyp_dec_all], [[x.split(" ")] for x in ref_dec_all])
         metrics["val"]["bleu"] = m_bleu_score*100
 
         # Print translations
@@ -195,53 +196,50 @@ def log_progress(start_time, val_loss, translations=None):
     return metrics
 
 
-def translate_sentence(batch, model, max_len=50):
+def translate_sentence(sentence, model, max_len=50):
     model.eval()
-    # Get batch data
-    src, src_mask, trg, trg_mask = [x.to(DEVICE1) for x in batch]
 
-    # src_tensor = torch.LongTensor(src).unsqueeze(0)#.to(DEVICE1)
+    src_tensor = sentence.long().to(DEVICE1)
+    src_mask = model.make_src_mask2(src_tensor)
 
-    src_mask = model.make_src_mask(src)
     with torch.no_grad():
-        enc_src = model.enc_input(src)
-        enc_src = model.encoder(enc_src, src_mask)
+        src_tensor = model.enc_input(src_tensor)
+        enc_src = model.encoder(src_tensor, src_mask)
 
     trg_indexes = [model.trg_tok.word2idx[model.trg_tok.SOS_WORD]]
+
     for i in range(max_len):
-
         trg_tensor = torch.LongTensor(trg_indexes).unsqueeze(0).to(DEVICE1)
-        trg_mask = model.make_trg_mask(trg_tensor)
+        trg_mask = model.make_trg_mask2(trg_tensor)
         with torch.no_grad():
-            enc_trg = model.dec_input(trg_tensor)
-            output, attention = model.decoder(enc_trg, enc_src, trg_mask, src_mask)
+            trg_tensor = model.dec_input(trg_tensor)
+            output, attention = model.decoder(trg_tensor, enc_src, trg_mask, src_mask)
             output = model.fc_out(output)  # (B, L, d_model) => (B, L, vocab)
-            # output = F.log_softmax(output)  # (B, L, d_model) => (B, L, vocab)
+
         pred_token = output.argmax(2)[:, -1].item()
-
         trg_indexes.append(pred_token)
-
         if pred_token == model.trg_tok.word2idx[model.trg_tok.EOS_WORD]:
             break
 
-    trg_tokens = [model.trg_tok.idx2word[i] for i in trg_indexes]
-    return trg_tokens[1:], attention
+    return trg_indexes, attention
 
 
-def calculate_bleu(data, model, max_len=50):
-    trgs = []
-    pred_trgs = []
+def get_translations(data, model, max_len=50):
+    src_dec_all, hyp_dec_all, ref_dec_all = [], [], []
 
-    for datum in data:
-        pred_trg, _ = translate_sentence(datum, model, max_len)
+    for batch in tqdm(data, total=len(data)):
+        # Get batch data
+        src, src_mask, trg, trg_mask = [x.to(DEVICE1) for x in batch]
+        batch_size, src_max_len, trg_max_len = src.shape[0], src.shape[1], trg.shape[1]
+
+        pred_trg, _ = translate_sentence(src, model, max_len)
 
         # cut off <eos> token
-        pred_trg = pred_trg[:-1]
+        hyp_dec_all += model.trg_tok.decode([pred_trg], remove_special_tokens=True)
+        ref_dec_all += model.trg_tok.decode(trg, remove_special_tokens=True)
+        src_dec_all += model.src_tok.decode(src, remove_special_tokens=True)
 
-        pred_trgs.append(pred_trg)
-        trgs.append([trg])
-
-    return bleu_score(pred_trgs, trgs)
+    return src_dec_all, hyp_dec_all, ref_dec_all
 
 
 if __name__ == "__main__":
@@ -259,25 +257,3 @@ if __name__ == "__main__":
 
         # Train model
         run_experiment(dataset, src, trg, model_name=MODEL_NAME, domain=domain)
-
-
-# # Get output
-# outputs = model.translate_batch(src, src_key_padding_mask, max_length=100, beam_width=1)
-#
-# # Get translations
-# trg_pred = [x[0][0] for x in outputs]  # Get best
-# src_dec, ref_dec, hyp_dec = get_translations(src, trg, trg_pred, model.src_tok, model.trg_tok)
-# src_dec_all += src_dec
-# ref_dec_all += ref_dec
-# hyp_dec_all += hyp_dec
-# break
-
-# # Print translations
-# if print_translations:
-#     helpers.print_translations(hypothesis=hyp_dec_all, references=ref_dec_all, source=src_dec_all, limit=None)
-#
-# # Compute metrics
-# metrics = {}
-# torch_bleu = torchtext.data.metrics.bleu_score([x.split(" ") for x in hyp_dec_all],
-#                                                [[x.split(" ")] for x in ref_dec_all])
-# metrics["torch_bleu"] = torch_bleu

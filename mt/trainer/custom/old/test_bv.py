@@ -5,9 +5,11 @@ import torch.optim as optim
 import torchtext
 from torchtext.legacy.datasets import Multi30k
 from torchtext.legacy.data import Field, BucketIterator
+from torchtext.data.metrics import bleu_score
 
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
+from tqdm import tqdm
 
 import spacy
 import numpy as np
@@ -128,42 +130,6 @@ optimizer = torch.optim.Adam(model.parameters(), lr = LEARNING_RATE)
 criterion = nn.CrossEntropyLoss(ignore_index = TRG_PAD_IDX)
 
 
-def train(model, iterator, optimizer, criterion, clip):
-    model.train()
-
-    epoch_loss = 0
-
-    for i, batch in enumerate(iterator):
-        src = batch.src
-        trg = batch.trg
-
-        optimizer.zero_grad()
-
-        output, _ = model(src, trg[:, :-1])
-
-        # output = [batch size, trg len - 1, output dim]
-        # trg = [batch size, trg len]
-
-        output_dim = output.shape[-1]
-
-        output = output.contiguous().view(-1, output_dim)
-        trg = trg[:, 1:].contiguous().view(-1)
-
-        # output = [batch size * trg len - 1, output dim]
-        # trg = [batch size * trg len - 1]
-
-        loss = criterion(output, trg)
-
-        loss.backward()
-
-        torch.nn.utils.clip_grad_norm_(model.parameters(), clip)
-
-        optimizer.step()
-
-        epoch_loss += loss.item()
-
-    return epoch_loss / len(iterator)
-
 
 def evaluate(model, iterator, criterion):
     model.eval()
@@ -206,33 +172,74 @@ CLIP = 1
 
 best_valid_loss = float('inf')
 
-for epoch in range(N_EPOCHS):
-
-    start_time = time.time()
-
-    train_loss = train(model, train_iterator, optimizer, criterion, CLIP)
-    valid_loss = evaluate(model, valid_iterator, criterion)
-
-    end_time = time.time()
-
-    epoch_mins, epoch_secs = epoch_time(start_time, end_time)
-
-    if valid_loss < best_valid_loss:
-        best_valid_loss = valid_loss
-        torch.save(model.state_dict(), 'tut6-model.pt')
-
-    print(f'Epoch: {epoch + 1:02} | Time: {epoch_mins}m {epoch_secs}s')
-    print(f'\tTrain Loss: {train_loss:.3f} | Train PPL: {math.exp(train_loss):7.3f}')
-    print(f'\t Val. Loss: {valid_loss:.3f} |  Val. PPL: {math.exp(valid_loss):7.3f}')
-
 model.load_state_dict(torch.load('tut6-model.pt'))
 
 test_loss = evaluate(model, test_iterator, criterion)
 
 print(f'| Test Loss: {test_loss:.3f} | Test PPL: {math.exp(test_loss):7.3f} |')
 
-model.load_state_dict(torch.load('tut6-model.pt'))
 
-test_loss = evaluate(model, test_iterator, criterion)
+def translate_sentence(sentence, src_field, trg_field, model, device, max_len=50):
+    model.eval()
 
-print(f'| Test Loss: {test_loss:.3f} | Test PPL: {math.exp(test_loss):7.3f} |')
+    if isinstance(sentence, str):
+        nlp = spacy.load('de_core_news_sm')
+        tokens = [token.text.lower() for token in nlp(sentence)]
+    else:
+        tokens = [token.lower() for token in sentence]
+
+    tokens = [src_field.init_token] + tokens + [src_field.eos_token]
+
+    src_indexes = [src_field.vocab.stoi[token] for token in tokens]
+
+    src_tensor = torch.LongTensor(src_indexes).unsqueeze(0).to(device)
+
+    src_mask = model.make_src_mask(src_tensor)
+
+    with torch.no_grad():
+        enc_src = model.encoder(src_tensor, src_mask)
+
+    trg_indexes = [trg_field.vocab.stoi[trg_field.init_token]]
+
+    for i in range(max_len):
+
+        trg_tensor = torch.LongTensor(trg_indexes).unsqueeze(0).to(device)
+
+        trg_mask = model.make_trg_mask(trg_tensor)
+
+        with torch.no_grad():
+            output, attention = model.decoder(trg_tensor, enc_src, trg_mask, src_mask)
+
+        pred_token = output.argmax(2)[:, -1].item()
+
+        trg_indexes.append(pred_token)
+
+        if pred_token == trg_field.vocab.stoi[trg_field.eos_token]:
+            break
+
+    trg_tokens = [trg_field.vocab.itos[i] for i in trg_indexes]
+
+    return trg_tokens[1:], attention
+
+
+def calculate_bleu(data, src_field, trg_field, model, device, max_len=50):
+    trgs = []
+    pred_trgs = []
+
+    for datum in tqdm(data, total=len(data)):
+        src = vars(datum)['src']
+        trg = vars(datum)['trg']
+
+        pred_trg, _ = translate_sentence(src, src_field, trg_field, model, device, max_len)
+
+        # cut off <eos> token
+        pred_trg = pred_trg[:-1]
+
+        pred_trgs.append(pred_trg)
+        trgs.append([trg])
+
+    return bleu_score(pred_trgs, trgs)
+
+bleu_score = calculate_bleu(test_data, SRC, TRG, model, device)
+
+print(f'BLEU score = {bleu_score*100:.2f}')

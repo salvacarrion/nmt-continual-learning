@@ -260,6 +260,35 @@ class Transformer(nn.Module):
         # Initialize
         #self.apply(initialize_weights)
 
+
+    def make_src_mask2(self, src):
+        # src = [batch size, src len]
+
+        src_mask = (src != self.src_tok.word2idx[self.src_tok.PAD_WORD]).unsqueeze(1).unsqueeze(2)
+
+        # src_mask = [batch size, 1, 1, src len]
+
+        return src_mask
+
+    def make_trg_mask2(self, trg):
+        # trg = [batch size, trg len]
+
+        trg_pad_mask = (trg != self.trg_tok.word2idx[self.trg_tok.PAD_WORD]).unsqueeze(1).unsqueeze(2)
+
+        # trg_pad_mask = [batch size, 1, 1, trg len]
+
+        trg_len = trg.shape[1]
+
+        trg_sub_mask = torch.tril(torch.ones((trg_len, trg_len), device=trg.device)).bool()
+
+        # trg_sub_mask = [trg len, trg len]
+
+        trg_mask = trg_pad_mask & trg_sub_mask
+
+        # trg_mask = [batch size, 1, trg len, trg len]
+
+        return trg_mask
+
     def forward(self, src, src_mask, trg, trg_mask):
         # Process masks
         src_mask = self.make_src_mask(src_mask)

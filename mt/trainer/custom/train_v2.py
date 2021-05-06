@@ -40,7 +40,7 @@ MODEL_NAME = "transformer"
 WANDB_PROJECT = "nmt"  # Run "wandb login" in the terminal
 
 
-MAX_EPOCHS = 50
+MAX_EPOCHS = 10
 LEARNING_RATE = 0.5e-3
 BATCH_SIZE = 128 #int(32*1.5)
 MAX_TOKENS = 9999999#4096 #int(4096*1.5)
@@ -128,9 +128,9 @@ def run_experiment(datapath, src, trg, model_name, domain=None, smart_batch=Fals
     optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
 
     # Load weights
-    checkpoint_path = os.path.join(datapath, DATASET_CHECKPOINT_NAME, "transformer_multi30k_best_new.pt")
-    print(f"Loading weights from: {checkpoint_path}")
-    model.load_state_dict(torch.load(checkpoint_path))
+    # checkpoint_path = os.path.join(datapath, DATASET_CHECKPOINT_NAME, "transformer_multi30k_best_new.pt")
+    # print(f"Loading weights from: {checkpoint_path}")
+    # model.load_state_dict(torch.load(checkpoint_path))
 
     # Tensorboard (it needs some epochs to start working ~10-20)
     tb_writer = SummaryWriter(os.path.join(datapath, DATASET_LOGS_NAME, f"{model_name}"))
