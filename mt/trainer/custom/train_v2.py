@@ -128,7 +128,9 @@ def run_experiment(datapath, src, trg, model_name, domain=None, smart_batch=Fals
     optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
 
     # Load weights
-    #model.load_state_dict(torch.load(checkpoint_path + "_best.pt"))
+    checkpoint_path = os.path.join(datapath, DATASET_CHECKPOINT_NAME, "transformer_multi30k_best_new.pt")
+    print(f"Loading weights from: {checkpoint_path}")
+    model.load_state_dict(torch.load(checkpoint_path))
 
     # Tensorboard (it needs some epochs to start working ~10-20)
     tb_writer = SummaryWriter(os.path.join(datapath, DATASET_LOGS_NAME, f"{model_name}"))

@@ -51,7 +51,7 @@ MULTIGPU = False
 DEVICE1 = torch.device("cuda" if torch.cuda.is_available() else "cpu")  # torch.device("cpu") #
 DEVICE2 = None  #torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 NUM_WORKERS = 0
-TOK_MODEL = "bpe"
+TOK_MODEL = "wt"
 TOK_SIZE = 16000
 TOK_FOLDER = f"{TOK_MODEL}.{TOK_SIZE}"
 LOWERCASE = True
@@ -73,15 +73,12 @@ torch.backends.cudnn.benchmark = False
 
 
 def run_experiment(datapath, src, trg, model_name, domain=None):
-    # checkpoint_path = os.path.join(datapath, DATASET_CHECKPOINT_NAME, f"{model_name}_{domain}_best.pt")
-    checkpoint_path = os.path.join(datapath, DATASET_CHECKPOINT_NAME, "transformer_multi30k_best.pt")
-
     # Load tokenizers
     src_tok, trg_tok = helpers.get_tokenizers(os.path.join(datapath, DATASET_TOK_NAME, TOK_FOLDER), src, trg, tok_model=TOK_MODEL, lower=LOWERCASE)
 
     # Load dataset
-    test_ds = TranslationDataset(os.path.join(datapath, DATASET_CLEAN_NAME), src_tok, trg_tok, "val")
-    test_loader = DataLoader(test_ds, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS, collate_fn=lambda x: TranslationDataset.collate_fn(x, MAX_TOKENS), pin_memory=True)
+    test_ds = TranslationDataset(os.path.join(datapath, DATASET_CLEAN_NAME), src_tok, trg_tok, "test")
+    test_loader = DataLoader(test_ds, batch_size=1, shuffle=True, num_workers=NUM_WORKERS, collate_fn=lambda x: TranslationDataset.collate_fn(x, MAX_TOKENS), pin_memory=True)
 
     # Instantiate model #1
     model = Transformer(d_model=256,
@@ -96,38 +93,46 @@ def run_experiment(datapath, src, trg, model_name, domain=None):
     criterion = nn.CrossEntropyLoss(ignore_index=trg_tok.word2idx[trg_tok.PAD_WORD])
 
     # Load weights
+    checkpoint_path = os.path.join(datapath, DATASET_CHECKPOINT_NAME, "transformer_multi30k_best_new.pt")
+    print(f"Loading weights from: {checkpoint_path}")
     model.load_state_dict(torch.load(checkpoint_path))
 
-    # Evaluate
-    start_time = time.time()
-    val_loss, translations = evaluate(model, test_loader, criterion)
+    # # Evaluate
+    # start_time = time.time()
+    # val_loss, translations = evaluate(model, test_loader, criterion)
+    #
+    # # Log progress
+    # metrics = log_progress(start_time, val_loss, translations)
+    #
+    # Get bleu
+    bleu_score = calculate_bleu(test_loader, model)
+    print(f'BLEU score = {bleu_score * 100:.2f}')
 
-    # Log progress
-    metrics = log_progress(start_time, val_loss, translations)
+    #
+    # # Get translations
+    # src_dec_all, hyp_dec_all, ref_dec_all = get_translations(model, test_loader)
+    #
+    # # Print translations
+    # helpers.print_translations(hyp_dec_all, ref_dec_all, src_dec_all, limit=50)
+    #
+    # # Compute scores
+    # m_bleu_score = bleu_score([x.split(" ") for x in hyp_dec_all], [[x.split(" ")] for x in ref_dec_all])
+    # print(f'BLEU score = {m_bleu_score*100:.3f}')
+    #
+    # # Create path
+    # eval_name = domain
+    # eval_path = os.path.join(datapath, DATASET_EVAL_NAME, eval_name)
+    # Path(eval_path).mkdir(parents=True, exist_ok=True)
+    #
+    # # Save translations to file
+    # with open(os.path.join(eval_path, 'src.txt'), 'w') as f:
+    #     f.writelines("%s\n" % s for s in src_dec_all)
+    # with open(os.path.join(eval_path, 'hyp.txt'), 'w') as f:
+    #     f.writelines("%s\n" % s for s in hyp_dec_all)
+    # with open(os.path.join(eval_path, 'ref.txt'), 'w') as f:
+    #     f.writelines("%s\n" % s for s in ref_dec_all)
+    # print("Translations written!")
 
-    # Get translations
-    src_dec_all, hyp_dec_all, ref_dec_all = get_translations(model, test_loader, src_tok, trg_tok)
-
-    # Print translations
-    helpers.print_translations(hyp_dec_all, ref_dec_all, src_dec_all, limit=50)
-
-    # Compute scores
-    m_bleu_score = bleu_score([x.split(" ") for x in hyp_dec_all], [[x.split(" ")] for x in ref_dec_all])
-    print(f'BLEU score = {m_bleu_score*100:.3f}')
-
-    # Create path
-    eval_name = domain
-    eval_path = os.path.join(datapath, DATASET_EVAL_NAME, eval_name)
-    Path(eval_path).mkdir(parents=True, exist_ok=True)
-
-    # Save translations to file
-    with open(os.path.join(eval_path, 'src.txt'), 'w') as f:
-        f.writelines("%s\n" % s for s in src_dec_all)
-    with open(os.path.join(eval_path, 'hyp.txt'), 'w') as f:
-        f.writelines("%s\n" % s for s in hyp_dec_all)
-    with open(os.path.join(eval_path, 'ref.txt'), 'w') as f:
-        f.writelines("%s\n" % s for s in ref_dec_all)
-    print("Translations written!")
 
 
 def evaluate(model, data_loader, criterion):
@@ -190,96 +195,53 @@ def log_progress(start_time, val_loss, translations=None):
     return metrics
 
 
-def get_translations(model, data_loader, src_tok, trg_tok, max_len=100):
-    srcs, trgs, pred_trgs = [], [], []
-
+def translate_sentence(batch, model, max_len=50):
     model.eval()
-    for i, batch in tqdm(enumerate(data_loader), total=len(data_loader)):
-        # Get batch data
-        src, src_mask, trg, trg_mask = [x.to(DEVICE1) for x in batch]
-        batch_size, src_max_len, trg_max_len = src.shape[0], src.shape[1], trg.shape[1]
+    # Get batch data
+    src, src_mask, trg, trg_mask = [x.to(DEVICE1) for x in batch]
 
-        pred_trg, _ = translate_sentence_vectorized(src, src_tok, trg_tok, model, max_len)
+    # src_tensor = torch.LongTensor(src).unsqueeze(0)#.to(DEVICE1)
 
-        pred_trgs += trg_tok.decode(pred_trg)
-        trgs += trg_tok.decode(trg)
-        srcs += src_tok.decode(src)
-        break
-
-    return srcs, pred_trgs, trgs
-
-
-def translate_sentence_vectorized(src_tensor, src_tok, trg_tok, model, max_len):
-    assert isinstance(src_tensor, torch.Tensor)
-
-    model.eval()
-    src_mask = model.make_src_mask(src_tensor)
-
+    src_mask = model.make_src_mask(src)
     with torch.no_grad():
-        enc_src = model.enc_input(src_tensor)
+        enc_src = model.enc_input(src)
         enc_src = model.encoder(enc_src, src_mask)
-    # enc_src = [batch_sz, src_len, hid_dim]
 
-    TRG_SOS_IDX = trg_tok.word2idx[trg_tok.SOS_WORD]
-    TRG_EOS_IDX = trg_tok.word2idx[trg_tok.EOS_WORD]
-    trg_indexes = [[TRG_SOS_IDX] for _ in range(len(src_tensor))]
-    # Even though some examples might have been completed by producing a <eos> token
-    # we still need to feed them through the model because other are not yet finished
-    # and all examples act as a batch. Once every single sentence prediction encounters
-    # <eos> token, then we can stop predicting.
-    translations_done = [0] * len(src_tensor)
+    trg_indexes = [model.trg_tok.word2idx[model.trg_tok.SOS_WORD]]
     for i in range(max_len):
-        trg_tensor = torch.LongTensor(trg_indexes).to(enc_src.device)
+
+        trg_tensor = torch.LongTensor(trg_indexes).unsqueeze(0).to(DEVICE1)
         trg_mask = model.make_trg_mask(trg_tensor)
         with torch.no_grad():
-            trg_tensor = model.dec_input(trg_tensor)
-            output, attention = model.decoder(trg_tensor, enc_src, trg_mask, src_mask)
+            enc_trg = model.dec_input(trg_tensor)
+            output, attention = model.decoder(enc_trg, enc_src, trg_mask, src_mask)
             output = model.fc_out(output)  # (B, L, d_model) => (B, L, vocab)
+            # output = F.log_softmax(output)  # (B, L, d_model) => (B, L, vocab)
+        pred_token = output.argmax(2)[:, -1].item()
 
-        pred_tokens = output.argmax(2)[:,-1]
-        for i, pred_token_i in enumerate(pred_tokens):
-            trg_indexes[i].append(pred_token_i)
-            if pred_token_i == TRG_EOS_IDX:
-                translations_done[i] = 1
-        if all(translations_done):
+        trg_indexes.append(pred_token)
+
+        if pred_token == model.trg_tok.word2idx[model.trg_tok.EOS_WORD]:
             break
 
-    # Iterate through each predicted example one by one;
-    # Cut-off the portion including the after the <eos> token
-    pred_sentences = []
-    for trg_sentence in trg_indexes:
-        pred_sentence = []
-        for i in range(1, len(trg_sentence)):
-            trg_idx = int(trg_sentence[i])
-            pred_sentence.append(trg_idx)
-            if trg_idx == TRG_EOS_IDX:
-                break
-        pred_sentences.append(pred_sentence)
-
-    return pred_sentences, attention
+    trg_tokens = [model.trg_tok.idx2word[i] for i in trg_indexes]
+    return trg_tokens[1:], attention
 
 
-def calculate_bleu_alt(iterator, src_field, trg_field, model, device, max_len = 50):
+def calculate_bleu(data, model, max_len=50):
     trgs = []
     pred_trgs = []
-    with torch.no_grad():
-        for batch in iterator:
-            src = batch.src
-            trg = batch.trg
-            _trgs = []
-            for sentence in trg:
-                tmp = []
-                # Start from the first token which skips the <start> token
-                for i in sentence[1:]:
-                    # Targets are padded. So stop appending as soon as a padding or eos token is encountered
-                    if i == trg_field.vocab.stoi[trg_field.eos_token] or i == trg_field.vocab.stoi[trg_field.pad_token]:
-                        break
-                    tmp.append(trg_field.vocab.itos[i])
-                _trgs.append([tmp])
-            trgs += _trgs
-            pred_trg, _ = translate_sentence_vectorized(src, src_field, trg_field, model, device)
-            pred_trgs += pred_trg
-    return pred_trgs, trgs, bleu_score(pred_trgs, trgs)
+
+    for datum in data:
+        pred_trg, _ = translate_sentence(datum, model, max_len)
+
+        # cut off <eos> token
+        pred_trg = pred_trg[:-1]
+
+        pred_trgs.append(pred_trg)
+        trgs.append([trg])
+
+    return bleu_score(pred_trgs, trgs)
 
 
 if __name__ == "__main__":
