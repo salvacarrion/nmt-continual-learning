@@ -1,39 +1,22 @@
+import math
 import os
-import numpy as np
 import random
 import time
-import math
 from pathlib import Path
-from einops import rearrange
-import wandb
 
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torch.optim as optim
-from torch.utils.tensorboard import SummaryWriter
+import torchtext
 from torch.utils.data import DataLoader
-
-import torchtext
-from torchtext.legacy.datasets import Multi30k
-from torchtext.legacy.data import Field, BucketIterator
-
-import torchtext
-import sacrebleu
-from datasets import load_metric
-
 from tqdm import tqdm
-from collections import Counter
 
-from mt.preprocess import utils
+from mt import DATASETS_PATH, DATASET_CLEAN_NAME, DATASET_TOK_NAME, DATASET_LOGS_NAME, DATASET_CHECKPOINT_NAME
 from mt import helpers
+from mt.preprocess import utils
 from mt.trainer.datasets import TranslationDataset
-from mt import DATASETS_PATH, DATASET_CLEAN_NAME, DATASET_TOK_NAME, DATASET_LOGS_NAME, DATASET_CHECKPOINT_NAME, DATASET_EVAL_NAME
-from mt.trainer.models.pytransformer.transformer import TransformerModel
-from mt.trainer.models.optim import ScheduledOptim
 from mt.trainer.models.transformer.transformer import Transformer
-from mt.trainer.tok import word_tokenizer
-
 
 MODEL_NAME = "transformer"
 
@@ -77,7 +60,7 @@ def run_experiment(datapath, src, trg, model_name, domain=None):
 
     # Load dataset
     test_ds = TranslationDataset(os.path.join(datapath, DATASET_CLEAN_NAME), src_tok, trg_tok, "test")
-    test_loader = DataLoader(test_ds, batch_size=1, shuffle=True, num_workers=NUM_WORKERS, collate_fn=lambda x: TranslationDataset.collate_fn(x, MAX_TOKENS), pin_memory=True)
+    test_loader = DataLoader(test_ds, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS, collate_fn=lambda x: TranslationDataset.collate_fn(x, MAX_TOKENS), pin_memory=True)
 
     # Instantiate model #1
     model = Transformer(d_model=256,
@@ -96,12 +79,12 @@ def run_experiment(datapath, src, trg, model_name, domain=None):
     print(f"Loading weights from: {checkpoint_path}")
     model.load_state_dict(torch.load(checkpoint_path))
 
-    # Evaluate
-    start_time = time.time()
-    val_loss, translations = evaluate(model, test_loader, criterion)
-
-    # Log progress
-    metrics = log_progress(start_time, val_loss, translations)
+    # # Evaluate
+    # start_time = time.time()
+    # val_loss, translations = evaluate(model, test_loader, criterion)
+    #
+    # # Log progress
+    # metrics = log_progress(start_time, val_loss, translations)
 
     # Get bleu
     src_dec_all, hyp_dec_all, ref_dec_all = get_translations(test_loader, model)
@@ -196,35 +179,93 @@ def log_progress(start_time, val_loss, translations=None):
     return metrics
 
 
-def translate_sentence(sentence, model, max_len=50):
+def translate_sentence(src, model, max_len=50):
     model.eval()
 
-    src_tensor = sentence.long().to(DEVICE1)
+    batch_size = src.shape[0]
+    src_tensor = src.long().to(DEVICE1)
     src_mask = model.make_src_mask2(src_tensor)
 
     with torch.no_grad():
         src_tensor = model.enc_input(src_tensor)
         enc_src = model.encoder(src_tensor, src_mask)
 
-    trg_indexes = [model.trg_tok.word2idx[model.trg_tok.SOS_WORD]]
+    # Prepare target inputs (sos)
+    TRG_SOS_IDX = model.trg_tok.word2idx[model.trg_tok.SOS_WORD]
+    TRG_EOS_IDX = model.trg_tok.word2idx[model.trg_tok.EOS_WORD]
+    trg = torch.LongTensor([[TRG_SOS_IDX] for _ in range(len(src_tensor))]).to(enc_src.device)
 
     for i in range(max_len):
-        trg_tensor = torch.LongTensor(trg_indexes).unsqueeze(0).to(DEVICE1)
-        trg_mask = model.make_trg_mask2(trg_tensor)
+        trg_mask = model.make_trg_mask2(trg)
         with torch.no_grad():
-            trg_tensor = model.dec_input(trg_tensor)
+            trg_tensor = model.dec_input(trg)
             output, attention = model.decoder(trg_tensor, enc_src, trg_mask, src_mask)
             output = model.fc_out(output)  # (B, L, d_model) => (B, L, vocab)
 
-        pred_token = output.argmax(2)[:, -1].item()
-        trg_indexes.append(pred_token)
-        if pred_token == model.trg_tok.word2idx[model.trg_tok.EOS_WORD]:
-            break
+        next_tokens = output.argmax(2)[:, -1].unsqueeze(1)
+        trg = torch.cat([trg, next_tokens], dim=1)
 
-    return trg_indexes, attention
+    return trg, attention
+
+def translate_batch(model, src, src_mask, max_length=150, beam_width=3):
+    # Build source mask
+    src_tensor = src.long().to(DEVICE1)
+    src_mask = model.make_src_mask2(src_tensor)
+
+    with torch.no_grad():
+        src_tensor = model.enc_input(src_tensor)
+        enc_src = model.encoder(src_tensor, src_mask)
+
+    # Prepare target inputs (sos)
+    TRG_SOS_IDX = model.trg_tok.word2idx[model.trg_tok.SOS_WORD]
+    TRG_EOS_IDX = model.trg_tok.word2idx[model.trg_tok.EOS_WORD]
+    trg = torch.LongTensor([[TRG_SOS_IDX] for _ in range(len(src))]).to(enc_src.device)
+
+    for i in range(max_length):
+        b_probs = []
+        b_idxs = []
+        for b in range(beam_width):
+            # Encode target tensor
+            _trg = trg[:, b, :] if trg.ndim > 2 else trg
+            trg_mask = model.make_trg_mask2(_trg)
+
+            with torch.no_grad():
+                enc_trg = model.dec_input(_trg)
+                output, attention = model.decoder(enc_trg, enc_src, trg_mask, src_mask)
+                output = model.fc_out(output)  # (B, L, d_model) => (B, L, vocab)
+                output = F.log_softmax(output)  # (B, L, d_model) => (B, L, vocab)
+
+            # Get top-k candidates per batch
+            probs, idxs = output[:, -1].sort(dim=1, descending=True)
+            probs = probs[:, :beam_width]  # .permute(0, 2, 1)  # Minor optimization
+            idxs = idxs[:, :beam_width]  # .permute(0, 2, 1)
+            b_probs.append(probs)
+            b_idxs.append(idxs)
+
+            if trg.ndim == 2:
+                break
+
+        # Merge all beams
+        b_idxs = torch.cat(b_idxs, dim=1)  # .squeeze(2)
+        b_probs = torch.cat(b_probs, dim=1)  # .squeeze(2)
+
+        # Sort candidates
+        probs, probsidxs_ = b_probs.sort(dim=1, descending=True)
+        probs = probs[..., :beam_width]
+        probsidxs_ = probsidxs_[..., :beam_width]
+        idxs_ = torch.cat([b_idxs[i, probsidxs_[i]].unsqueeze(0) for i in range(len(b_idxs))])
+
+        if trg.ndim == 2:
+            trg = trg.repeat(1, beam_width).unsqueeze(2)
+        trg = torch.cat([trg, idxs_.unsqueeze(2)], dim=2)
+        sdasd = 3
+
+    # Split sentences by beam search
+    pred_sentences = [trg[:, i, :] for i in range(beam_width)]
+    return pred_sentences
 
 
-def get_translations(data, model, max_len=50):
+def get_translations(data, model, max_len=50, beam_width=1):
     src_dec_all, hyp_dec_all, ref_dec_all = [], [], []
 
     for batch in tqdm(data, total=len(data)):
@@ -233,9 +274,11 @@ def get_translations(data, model, max_len=50):
         batch_size, src_max_len, trg_max_len = src.shape[0], src.shape[1], trg.shape[1]
 
         pred_trg, _ = translate_sentence(src, model, max_len)
+        # pred_trg = translate_batch(model, src, src_mask, max_length=max_len, beam_width=beam_width)
+        # pred_trg = pred_trg[0]
 
         # cut off <eos> token
-        hyp_dec_all += model.trg_tok.decode([pred_trg], remove_special_tokens=True)
+        hyp_dec_all += model.trg_tok.decode(pred_trg, remove_special_tokens=True)
         ref_dec_all += model.trg_tok.decode(trg, remove_special_tokens=True)
         src_dec_all += model.src_tok.decode(src, remove_special_tokens=True)
 
