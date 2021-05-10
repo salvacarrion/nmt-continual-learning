@@ -187,7 +187,7 @@ def get_translations(data, model, max_length=50, beam_width=3):
         src, src_mask, trg, trg_mask = [x.to(DEVICE1) for x in batch]
         batch_size, src_max_len, trg_max_len = src.shape[0], src.shape[1], trg.shape[1]
 
-        pred_trg, _ = model.translate_batch(src, max_length=max_length, beam_width=beam_width)
+        pred_trg, probs, _ = model.translate_batch(src, max_length=max_length, beam_width=beam_width)
         pred_trg = pred_trg[0]
 
         # cut off <eos> token

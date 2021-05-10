@@ -358,7 +358,8 @@ class Transformer(nn.Module):
                 break
         # Split sentences by beam search
         trg = [trg[:, i, :] for i in range(beam_width)]
-        return trg, attention
+        probs = [beam_probs[:, i] for i in range(beam_width)]
+        return trg, probs, attention
 
     def count_parameters(self):
         return sum(p.numel() for p in self.parameters() if p.requires_grad)
