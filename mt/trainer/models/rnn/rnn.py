@@ -198,7 +198,7 @@ class Seq2Seq(nn.Module):
         probs = self.softmax(output)  # (B, L, vocab)
         return probs, hidden
 
-    def translate_batch(self, src, src_mask, sos_idx, eos_idx, max_length=150, beam_width=1):
+    def translate_batch(self, src, src_mask, sos_idx, eos_idx, max_length=100, beam_width=1):
         # Run encoder
         src_len = src_mask.sum(dim=1)
         with torch.no_grad():
