@@ -24,7 +24,7 @@ class MaxTokensBatchSampler(BatchSampler):
         self._build_buckets()
 
     def __iter__(self):
-        if self.shuffle:
+        if self.shuffle:  # Shuffle everything
             self._build_buckets()
 
         # Iterate over buckets

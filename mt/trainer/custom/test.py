@@ -71,17 +71,20 @@ def run_experiment(datapath, src, trg, model_name, domain=None):
 
     # Load dataset
     test_ds = TranslationDataset(os.path.join(datapath, DATASET_CLEAN_NAME), src_tok, trg_tok, "test")
+
+    kwargs_test = {}
     if SAMPLER_NAME == "bucket":
         test_sampler = BucketBatchSampler(SequentialSampler(test_ds), batch_size=BATCH_SIZE, drop_last=False,
                                          sort_key=lambda i: len(test_ds.datasets.iloc[i]["src"].split()))
-    elif SAMPLER_NAME == "max_tokens":
+    elif SAMPLER_NAME == "maxtokens":
         test_sampler = MaxTokensBatchSampler(SequentialSampler(test_ds), shuffle=False, batch_size=BATCH_SIZE,
                                              max_tokens=MAX_TOKENS, drop_last=False, sort_key=lambda i: len(test_ds.datasets.iloc[i]["src"].split()))
     else:
         test_sampler = None
+        kwargs_test = {"batch_size": BATCH_SIZE, "shuffle": False}
 
     # Define dataloader
-    test_loader = DataLoader(test_ds, num_workers=NUM_WORKERS, collate_fn=lambda x: TranslationDataset.collate_fn(x, MAX_TOKENS), pin_memory=True, batch_sampler=test_sampler)
+    test_loader = DataLoader(test_ds, num_workers=NUM_WORKERS, collate_fn=lambda x: TranslationDataset.collate_fn(x, MAX_TOKENS), pin_memory=True, batch_sampler=test_sampler, **kwargs_test)
 
     # Instantiate model #1
     model = Transformer(d_model=256,

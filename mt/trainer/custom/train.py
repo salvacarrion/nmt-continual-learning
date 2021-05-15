@@ -51,7 +51,7 @@ TOK_MODEL = "wt"
 TOK_SIZE = 16000
 TOK_FOLDER = f"{TOK_MODEL}.{TOK_SIZE}"
 LOWERCASE = True
-SAMPLER_NAME = None #"maxtokens"  # bucket # None
+SAMPLER_NAME = "maxtokens" #"maxtokens"  # bucket # None
 
 print(f"Device #1: {DEVICE1}")
 print(f"Device #2: {DEVICE2}")
@@ -95,7 +95,7 @@ def run_experiment(datapath, src, trg, model_name, domain=None, smart_batch=Fals
     config.tok_size = TOK_SIZE
     config.tok_folder = TOK_FOLDER
     config.lowercase = LOWERCASE
-    config.sampler_name = SAMPLER_NAME
+    config.sampler_name = str(SAMPLER_NAME)
 
     ###########################################################################
     ###########################################################################
@@ -111,24 +111,28 @@ def run_experiment(datapath, src, trg, model_name, domain=None, smart_batch=Fals
     val_ds = TranslationDataset(os.path.join(datapath, datapath_clean), src_tok, trg_tok, "val")
 
     # Build dataloaders
+    kwargs_train = {}
+    kwargs_val = {}
     if SAMPLER_NAME == "bucket":
         train_sampler = BucketBatchSampler(SequentialSampler(train_ds), batch_size=BATCH_SIZE, drop_last=False,
                                            sort_key=lambda i: len(train_ds.datasets.iloc[i]["src"].split()))
         val_sampler = BucketBatchSampler(SequentialSampler(val_ds), batch_size=BATCH_SIZE, drop_last=False,
                                          sort_key=lambda i: len(val_ds.datasets.iloc[i]["src"].split()))
-    elif SAMPLER_NAME == "max_tokens":
+    elif SAMPLER_NAME == "maxtokens":
         train_sampler = MaxTokensBatchSampler(SequentialSampler(train_ds), shuffle=True, batch_size=BATCH_SIZE,
                                               max_tokens=MAX_TOKENS, drop_last=False,
                                               sort_key=lambda i: len(train_ds.datasets.iloc[i]["src"].split()))
         val_sampler = MaxTokensBatchSampler(SequentialSampler(val_ds), shuffle=False, batch_size=BATCH_SIZE,
-                                            max_tokens=MAX_TOKENS, drop_last=False,
+                                             max_tokens=MAX_TOKENS, drop_last=False,
                                             sort_key=lambda i: len(val_ds.datasets.iloc[i]["src"].split()))
     else:
         train_sampler = val_sampler = None
+        kwargs_train = {"batch_size": BATCH_SIZE, "shuffle": True}
+        kwargs_val = {"batch_size": BATCH_SIZE, "shuffle": False}
 
     # Define dataloader
-    train_loader = DataLoader(train_ds, num_workers=NUM_WORKERS, collate_fn=lambda x: TranslationDataset.collate_fn(x, MAX_TOKENS), pin_memory=True, batch_sampler=train_sampler)
-    val_loader = DataLoader(val_ds, num_workers=NUM_WORKERS, collate_fn=lambda x: TranslationDataset.collate_fn(x, MAX_TOKENS), pin_memory=True, batch_sampler=val_sampler)
+    train_loader = DataLoader(train_ds, num_workers=NUM_WORKERS, collate_fn=lambda x: TranslationDataset.collate_fn(x, MAX_TOKENS), pin_memory=True, batch_sampler=train_sampler, **kwargs_train)
+    val_loader = DataLoader(val_ds, num_workers=NUM_WORKERS, collate_fn=lambda x: TranslationDataset.collate_fn(x, MAX_TOKENS), pin_memory=True, batch_sampler=val_sampler, **kwargs_val)
 
     # Instantiate model #1
     model = Transformer(d_model=256,

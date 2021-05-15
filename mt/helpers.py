@@ -144,4 +144,4 @@ def epoch_time(start_time, end_time):
     elapsed_time = end_time - start_time
     elapsed_mins, elapsed_secs = divmod(elapsed_time, 60)
     elapsed_hours, elapsed_mins = divmod(elapsed_mins, 60)
-    return elapsed_hours, elapsed_mins, elapsed_secs
+    return int(elapsed_hours), int(elapsed_mins), int(elapsed_secs)
