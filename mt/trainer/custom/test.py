@@ -3,6 +3,7 @@ import os
 import random
 import time
 from pathlib import Path
+import json
 
 import numpy as np
 import torch
@@ -132,7 +133,13 @@ def run_experiment(datapath, src, trg, model_name, domain=None):
         f.writelines("%s\n" % s for s in hyp_dec_all)
     with open(os.path.join(eval_path, 'ref.txt'), 'w') as f:
         f.writelines("%s\n" % s for s in ref_dec_all)
-    print("Translations written!")
+    print(f"Translations written! => Path: {eval_path}")
+
+    # Save metrics to file
+    with open(os.path.join(eval_path, 'metrics.json'), 'w') as f:
+        json.dump(metrics, f)
+    print("Metrics saved!")
+    print("\t- To get BLEU use: 'cat hyp.txt | sacrebleu ref.txt'")
 
     print("************************************************************")
     epoch_hours, epoch_mins, epoch_secs = helpers.epoch_time(start_time, end_time=time.time())
