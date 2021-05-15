@@ -30,7 +30,7 @@ MODEL_NAME = "transformer"
 MAX_EPOCHS = 50
 LEARNING_RATE = 0.5e-3
 BATCH_SIZE = 128 #int(32*1.5)
-MAX_TOKENS = 1024*8  #int(4096*1.5)
+MAX_TOKENS = 4096  #int(4096*1.5)
 WARMUP_UPDATES = 4000
 PATIENCE = 10
 ACC_GRADIENTS = 1
@@ -118,7 +118,7 @@ def run_experiment(datapath, src, trg, model_name, domain=None):
 
     # Compute scores
     bleu_score = torchtext.data.metrics.bleu_score([x.split() for x in hyp_dec_all], [[x.split()] for x in ref_dec_all])
-    print(f'BLEU score = {bleu_score * 100:.2f}')
+    print(f'BLEU score (beam_width={BEAM_WIDTH}; max_length={MAX_LENGTH})= {bleu_score * 100:.2f}')
 
     # Create path
     eval_name = domain
