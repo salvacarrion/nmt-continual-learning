@@ -2,6 +2,7 @@
 
 torch==1.8.1
 pytorch-lightning==1.2.7
+pytorch-nlp==0.5.0
 
 # Fairseq
 #fairseq==0.10.2  #c3d2beec96bd609f87d8da14cc2dffdbbd843b54

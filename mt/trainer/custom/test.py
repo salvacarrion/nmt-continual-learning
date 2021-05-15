@@ -8,15 +8,21 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.utils.data import DataLoader
+from torch.utils.data.sampler import SequentialSampler
+
 import torchtext
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from mt import DATASETS_PATH, DATASET_CLEAN_NAME, DATASET_TOK_NAME, DATASET_LOGS_NAME, DATASET_CHECKPOINT_NAME
+from mt import DATASETS_PATH, DATASET_CLEAN_NAME, DATASET_EVAL_NAME, DATASET_TOK_NAME, DATASET_LOGS_NAME, DATASET_CHECKPOINT_NAME
 from mt import helpers
 from mt.preprocess import utils
 from mt.trainer.datasets import TranslationDataset
 from mt.trainer.models.transformer.transformer import Transformer
+
+from mt.max_tokens_batch_sampler import MaxTokensBatchSampler
+from torchnlp.samplers import BucketBatchSampler
 
 MODEL_NAME = "transformer"
 
@@ -24,7 +30,7 @@ MODEL_NAME = "transformer"
 MAX_EPOCHS = 50
 LEARNING_RATE = 0.5e-3
 BATCH_SIZE = 128 #int(32*1.5)
-MAX_TOKENS = 4096  #int(4096*1.5)
+MAX_TOKENS = 1024*8  #int(4096*1.5)
 WARMUP_UPDATES = 4000
 PATIENCE = 10
 ACC_GRADIENTS = 1
@@ -37,6 +43,9 @@ TOK_MODEL = "wt"
 TOK_SIZE = 16000
 TOK_FOLDER = f"{TOK_MODEL}.{TOK_SIZE}"
 LOWERCASE = True
+SAMPLER_NAME = "maxtokens"
+MAX_LENGTH = 50
+BEAM_WIDTH = 3
 
 print(f"Device #1: {DEVICE1}")
 print(f"Device #2: {DEVICE2}")
@@ -60,7 +69,17 @@ def run_experiment(datapath, src, trg, model_name, domain=None):
 
     # Load dataset
     test_ds = TranslationDataset(os.path.join(datapath, DATASET_CLEAN_NAME), src_tok, trg_tok, "test")
-    test_loader = DataLoader(test_ds, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS, collate_fn=lambda x: TranslationDataset.collate_fn(x, MAX_TOKENS), pin_memory=True)
+    if SAMPLER_NAME == "bucket":
+        test_sampler = BucketBatchSampler(SequentialSampler(test_ds), batch_size=BATCH_SIZE, drop_last=False,
+                                         sort_key=lambda i: len(test_ds.datasets.iloc[i]["src"].split()))
+    elif SAMPLER_NAME == "max_tokens":
+        test_sampler = MaxTokensBatchSampler(SequentialSampler(test_ds), shuffle=False, batch_size=BATCH_SIZE,
+                                             max_tokens=MAX_TOKENS, drop_last=False, sort_key=lambda i: len(test_ds.datasets.iloc[i]["src"].split()))
+    else:
+        test_sampler = None
+
+    # Define dataloader
+    test_loader = DataLoader(test_ds, num_workers=NUM_WORKERS, collate_fn=lambda x: TranslationDataset.collate_fn(x, MAX_TOKENS), pin_memory=True, batch_sampler=test_sampler)
 
     # Instantiate model #1
     model = Transformer(d_model=256,
@@ -79,44 +98,36 @@ def run_experiment(datapath, src, trg, model_name, domain=None):
     print(f"Loading weights from: {checkpoint_path}")
     model.load_state_dict(torch.load(checkpoint_path))
 
-    # # Evaluate
-    # start_time = time.time()
-    # val_loss, translations = evaluate(model, test_loader, criterion)
-    #
-    # # Log progress
-    # metrics = log_progress(start_time, val_loss, translations)
+    # Evaluate
+    start_time = time.time()
+    val_loss, translations = evaluate(model, test_loader, criterion)
+
+    # Log progress
+    metrics = log_progress(start_time, val_loss, translations)
 
     # Get bleu
-    src_dec_all, hyp_dec_all, ref_dec_all = get_translations(test_loader, model)
+    src_dec_all, hyp_dec_all, ref_dec_all = get_translations(test_loader, model, max_length=MAX_LENGTH, beam_width=BEAM_WIDTH)
 
+    # Print translations
+    helpers.print_translations(hyp_dec_all, ref_dec_all, src_dec_all, limit=50)
+
+    # Compute scores
     bleu_score = torchtext.data.metrics.bleu_score([x.split() for x in hyp_dec_all], [[x.split()] for x in ref_dec_all])
     print(f'BLEU score = {bleu_score * 100:.2f}')
 
-    #
-    # # Get translations
-    # src_dec_all, hyp_dec_all, ref_dec_all = get_translations(model, test_loader)
-    #
-    # # Print translations
-    # helpers.print_translations(hyp_dec_all, ref_dec_all, src_dec_all, limit=50)
-    #
-    # # Compute scores
-    # m_bleu_score = bleu_score([x.split(" ") for x in hyp_dec_all], [[x.split(" ")] for x in ref_dec_all])
-    # print(f'BLEU score = {m_bleu_score*100:.3f}')
-    #
-    # # Create path
-    # eval_name = domain
-    # eval_path = os.path.join(datapath, DATASET_EVAL_NAME, eval_name)
-    # Path(eval_path).mkdir(parents=True, exist_ok=True)
-    #
-    # # Save translations to file
-    # with open(os.path.join(eval_path, 'src.txt'), 'w') as f:
-    #     f.writelines("%s\n" % s for s in src_dec_all)
-    # with open(os.path.join(eval_path, 'hyp.txt'), 'w') as f:
-    #     f.writelines("%s\n" % s for s in hyp_dec_all)
-    # with open(os.path.join(eval_path, 'ref.txt'), 'w') as f:
-    #     f.writelines("%s\n" % s for s in ref_dec_all)
-    # print("Translations written!")
+    # Create path
+    eval_name = domain
+    eval_path = os.path.join(datapath, DATASET_EVAL_NAME, eval_name)
+    Path(eval_path).mkdir(parents=True, exist_ok=True)
 
+    # Save translations to file
+    with open(os.path.join(eval_path, 'src.txt'), 'w') as f:
+        f.writelines("%s\n" % s for s in src_dec_all)
+    with open(os.path.join(eval_path, 'hyp.txt'), 'w') as f:
+        f.writelines("%s\n" % s for s in hyp_dec_all)
+    with open(os.path.join(eval_path, 'ref.txt'), 'w') as f:
+        f.writelines("%s\n" % s for s in ref_dec_all)
+    print("Translations written!")
 
 
 def evaluate(model, data_loader, criterion):

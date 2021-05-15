@@ -1,8 +1,5 @@
-import math
-
-from torch.utils.data.sampler import BatchSampler, RandomSampler, SequentialSampler, SubsetRandomSampler
-
-from torchnlp.samplers.sorted_sampler import SortedSampler
+import random
+from torch.utils.data.sampler import BatchSampler, RandomSampler, SubsetRandomSampler
 from torchnlp.utils import identity
 
 
@@ -22,17 +19,38 @@ class MaxTokensBatchSampler(BatchSampler):
         self.bucket_size_multiplier = bucket_size_multiplier
         self.shuffle = shuffle
 
+        # Not a clean solution
+        self.bucket_batches = []
+        self._build_buckets()
+
     def __iter__(self):
+        if self.shuffle:
+            self._build_buckets()
+
+        # Iterate over buckets
+        for batches, batch_sizes in self.bucket_batches:
+            # Shuffle bucket-batch order
+            batches = SubsetRandomSampler(batches) if self.shuffle else batches
+            for batch in batches:
+                if self.shuffle:  # Shuffle inner batch
+                    random.shuffle(batch)
+                yield batch  # Batch indexes [sent1_idx, sent2_idx,...]
+
+    def __len__(self):
+        return sum([len(x[0]) for x in self.bucket_batches])
+
+    def _build_buckets(self):
         # Randomize samples
-        rnd_sampler = RandomSampler(self.sampler) if self.shuffle else self.sampler
+        tmp_sampler = RandomSampler(self.sampler) if self.shuffle else self.sampler
 
         # Split samples in N batches (or "buckets")
-        bucket_sampler = BatchSampler(rnd_sampler, min(self.batch_size * self.bucket_size_multiplier, len(self.sampler)), False)
+        tmp_sampler = BatchSampler(tmp_sampler, min(self.batch_size * self.bucket_size_multiplier, len(self.sampler)),
+                                   False)
 
         # Sort samples
-        bucket_batches = []
-        for bucket in bucket_sampler:
-            bucket_lengths = sorted([(i, self.sort_key(i)) for i in bucket], key=lambda x: x[1])
+        self.bucket_batches = []
+        for bucket in tmp_sampler:
+            bucket_sorted = sorted([(i, self.sort_key(i)) for i in bucket], key=lambda x: x[1])
 
             # Create batches constrained
             batches = []
@@ -40,7 +58,7 @@ class MaxTokensBatchSampler(BatchSampler):
 
             last_batch = []
             last_batch_size = 0
-            for i, (sample_i, length_i) in enumerate(bucket_lengths):
+            for i, (sample_i, length_i) in enumerate(bucket_sorted):
                 if (last_batch_size + length_i) < self.max_tokens:
                     last_batch.append(sample_i)
                     last_batch_size += length_i
@@ -58,14 +76,4 @@ class MaxTokensBatchSampler(BatchSampler):
             batch_sizes.append(last_batch_size)
 
             # Add bucket batches
-            bucket_batches.append((batches, batch_sizes))
-
-        for batches, batch_sizes in bucket_batches:
-            for batch in batches:
-                yield batch
-
-    def __len__(self):
-        if self.drop_last:
-            return len(self.sampler) // self.batch_size
-        else:
-            return math.ceil(len(self.sampler) / self.batch_size)
+            self.bucket_batches.append((batches, batch_sizes))
