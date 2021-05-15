@@ -58,7 +58,7 @@ def collate_fn(examples, src_tok, trg_tok, max_tokens):
 
 class FastBPETokenizer:
 
-    def __init__(self, padding=False, truncation=False, max_length=None, lower=False, lang=None):
+    def __init__(self, padding=False, truncation=False, max_length=None, lower=False, apply_bpe=True, lang=None):
         super().__init__()
         self.SOS_WORD = '[SOS]'
         self.PAD_WORD = '[PAD]'
@@ -78,6 +78,7 @@ class FastBPETokenizer:
         self.truncation = truncation
         self.max_length = max_length
         self.lower = lower
+        self.apply_bpe = apply_bpe
         self.lang = lang
 
     def get_vocab_size(self):
@@ -113,7 +114,7 @@ class FastBPETokenizer:
                 padded[k][i] = tmp
         return padded
 
-    def apply_bpe(self, x):
+    def apply_bpe_f(self, x):
         if isinstance(x, str):
             x =[x]
         return self.tokenizer.apply(x)
@@ -156,16 +157,16 @@ class FastBPETokenizer:
     def decode_with_mask(self, x, mask):
         return [[(ii, jj) for ii, jj in zip(i, j)] for i, j in zip(self.decode(x, return_str=False, decode_bpe=False, remove_special_tokens=False), mask.cpu().numpy())]
 
-    def preprocess(self, x, lower, apply_bpe=True):
+    def preprocess(self, x, lower, apply_bpe):
         if lower:
             x = x.lower()
 
         if apply_bpe:
             x = self.tokenizer.apply([x])[0]
-        return x.split(' ')
+        return x.strip().split(' ')
 
     def encode_sample(self, x, mask_eos=False):
-        tokens = [w if w in self.word2idx else self.UNK_WORD for w in self.preprocess(x, self.lower)]
+        tokens = [w if w in self.word2idx else self.UNK_WORD for w in self.preprocess(x, self.lower, self.apply_bpe)]
         tokens = tokens[:(self.max_length-2)] if self.truncation else tokens  # Trucante two extra due to sos/eos
         tokens = [self.SOS_WORD] + tokens + [self.EOS_WORD]
 

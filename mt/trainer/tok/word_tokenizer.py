@@ -161,7 +161,7 @@ class WordTokenizer:
     def preprocess(self, x, lower):
         if lower:
             x = x.lower()
-        return x.split(' ')
+        return x.strip().split()
 
     def encode_sample(self, x, mask_eos=False):
         tokens = [w if w in self.word2idx else self.UNK_WORD for w in self.preprocess(x, lower=self.lower)]

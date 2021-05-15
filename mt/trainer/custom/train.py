@@ -35,22 +35,23 @@ MODEL_NAME = "transformer"
 WANDB_PROJECT = "nmt"  # Run "wandb login" in the terminal
 
 
-MAX_EPOCHS = 10
+MAX_EPOCHS = 20
 LEARNING_RATE = 0.5e-3
 BATCH_SIZE = 128 #int(32*1.5)
 MAX_TOKENS = 4096 #int(4096*1.5)
 WARMUP_UPDATES = 4000
-PATIENCE = 5
+PATIENCE = 10
 ACC_GRADIENTS = 1
 WEIGHT_DECAY = 0.0001
+CLIP_GRADIENTS = 1.0
 MULTIGPU = False
 DEVICE1 = torch.device("cuda" if torch.cuda.is_available() else "cpu")  # torch.device("cpu") #
 DEVICE2 = None  #torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 NUM_WORKERS = 0
-TOK_MODEL = "wt"
+TOK_MODEL = "bpe"
 TOK_SIZE = 16000
 TOK_FOLDER = f"{TOK_MODEL}.{TOK_SIZE}"
-LOWERCASE = True
+LOWERCASE = False
 SAMPLER_NAME = "maxtokens" #"maxtokens"  # bucket # None
 
 print(f"Device #1: {DEVICE1}")
@@ -67,6 +68,10 @@ torch.manual_seed(SEED)
 torch.cuda.manual_seed(SEED)
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
+
+
+def len_func(ds, i):
+    return len(ds.datasets.iloc[i]["src"].split())
 
 
 def run_experiment(datapath, src, trg, model_name, domain=None, smart_batch=False):
@@ -87,6 +92,7 @@ def run_experiment(datapath, src, trg, model_name, domain=None, smart_batch=Fals
     config.patience = PATIENCE
     config.acc_gradients = ACC_GRADIENTS
     config.weight_decay = WEIGHT_DECAY
+    config.clip_gradients = CLIP_GRADIENTS
     config.multigpu = MULTIGPU
     config.device1 = str(DEVICE1)
     config.device2 = str(DEVICE2)
@@ -96,7 +102,7 @@ def run_experiment(datapath, src, trg, model_name, domain=None, smart_batch=Fals
     config.tok_folder = TOK_FOLDER
     config.lowercase = LOWERCASE
     config.sampler_name = str(SAMPLER_NAME)
-
+    print(config)
     ###########################################################################
     ###########################################################################
 
@@ -107,6 +113,11 @@ def run_experiment(datapath, src, trg, model_name, domain=None, smart_batch=Fals
 
     # Load dataset
     datapath_clean = DATASET_CLEAN_SORTED_NAME if smart_batch else DATASET_CLEAN_NAME
+    if TOK_MODEL == "bpe":  # Do not preprocess again when using bpe
+        src_tok.apply_bpe = False
+        trg_tok.apply_bpe = False
+        datapath_clean = os.path.join(DATASET_TOK_NAME, TOK_FOLDER)
+
     train_ds = TranslationDataset(os.path.join(datapath, datapath_clean), src_tok, trg_tok, "train")
     val_ds = TranslationDataset(os.path.join(datapath, datapath_clean), src_tok, trg_tok, "val")
 
@@ -115,16 +126,16 @@ def run_experiment(datapath, src, trg, model_name, domain=None, smart_batch=Fals
     kwargs_val = {}
     if SAMPLER_NAME == "bucket":
         train_sampler = BucketBatchSampler(SequentialSampler(train_ds), batch_size=BATCH_SIZE, drop_last=False,
-                                           sort_key=lambda i: len(train_ds.datasets.iloc[i]["src"].split()))
+                                           sort_key=lambda i: len_func(train_ds, i))
         val_sampler = BucketBatchSampler(SequentialSampler(val_ds), batch_size=BATCH_SIZE, drop_last=False,
-                                         sort_key=lambda i: len(val_ds.datasets.iloc[i]["src"].split()))
+                                         sort_key=lambda i: len_func(val_ds, i))
     elif SAMPLER_NAME == "maxtokens":
         train_sampler = MaxTokensBatchSampler(SequentialSampler(train_ds), shuffle=True, batch_size=BATCH_SIZE,
                                               max_tokens=MAX_TOKENS, drop_last=False,
-                                              sort_key=lambda i: len(train_ds.datasets.iloc[i]["src"].split()))
+                                              sort_key=lambda i: len_func(train_ds, i))
         val_sampler = MaxTokensBatchSampler(SequentialSampler(val_ds), shuffle=False, batch_size=BATCH_SIZE,
                                              max_tokens=MAX_TOKENS, drop_last=False,
-                                            sort_key=lambda i: len(val_ds.datasets.iloc[i]["src"].split()))
+                                             sort_key=lambda i: len_func(val_ds, i))
     else:
         train_sampler = val_sampler = None
         kwargs_train = {"batch_size": BATCH_SIZE, "shuffle": True}
@@ -140,9 +151,9 @@ def run_experiment(datapath, src, trg, model_name, domain=None, smart_batch=Fals
                         enc_heads=8, dec_heads=8,
                         enc_dff_dim=512, dec_dff_dim=512,
                         enc_dropout=0.1, dec_dropout=0.1,
-                        max_src_len=200, max_trg_len=200,
+                        max_src_len=2000, max_trg_len=2000,
                         src_tok=src_tok, trg_tok=trg_tok,
-                        static_pos_emb=False).to(DEVICE1)
+                        static_pos_emb=True).to(DEVICE1)
     model.apply(initialize_weights)
     print(f'The model has {model.count_parameters():,} trainable parameters')
     criterion = nn.CrossEntropyLoss(ignore_index=trg_tok.word2idx[trg_tok.PAD_WORD])
@@ -221,7 +232,7 @@ def save_checkpoint(model, checkpoint_path, metrics, best_score):
     return best_score
 
 
-def train(model, optimizer, data_loader, criterion, clip=1.0):
+def train(model, optimizer, data_loader, criterion):
     epoch_loss = 0.0
 
     model.train()
@@ -233,19 +244,25 @@ def train(model, optimizer, data_loader, criterion, clip=1.0):
             batch_size, src_max_len, trg_max_len = src.shape[0], src.shape[1], trg.shape[1]
 
             # Get output
-            optimizer.zero_grad()
-            # output, _ = model(src, trg[:, :-1])
             output, _ = model(src, src_mask, trg[:, :-1], trg_mask[:, :-1])
             output_dim = output.shape[-1]
             output = output.contiguous().view(-1, output_dim)
             trg = trg[:, 1:].contiguous().view(-1).long()
 
             # Compute loss
-            loss = criterion(output, trg)
+            loss = criterion(output, trg) / ACC_GRADIENTS  # Normalize loss
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), clip)
-            optimizer.step()
+
+            # Track total loss
             epoch_loss += loss.item()
+
+            # Accumulate gradients
+            if (i+1) % ACC_GRADIENTS == 0 or (i+1) == len(data_loader):
+                # Clip gradients
+                if CLIP_GRADIENTS > 0:
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), CLIP_GRADIENTS)
+                optimizer.step()
+                optimizer.zero_grad()
         except RuntimeError as e:
             print("ERROR BATCH: " + str(i+1))
             print(e)
@@ -329,6 +346,7 @@ if __name__ == "__main__":
     # Get all folders in the root path
     # datasets = [os.path.join(DATASETS_PATH, x) for x in ["health_es-en", "biological_es-en", "merged_es-en"]]
     datasets = [os.path.join(DATASETS_PATH, "multi30k_de-en")]
+    # datasets = [os.path.join(DATASETS_PATH, "health_es-en")]
     for dataset in datasets:
         domain, (src, trg) = utils.get_dataset_ids(dataset)
         fname_base = f"{domain}_{src}-{trg}"

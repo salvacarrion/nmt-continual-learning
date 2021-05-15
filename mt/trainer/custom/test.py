@@ -16,7 +16,7 @@ import torchtext
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from mt import DATASETS_PATH, DATASET_CLEAN_NAME, DATASET_EVAL_NAME, DATASET_TOK_NAME, DATASET_LOGS_NAME, DATASET_CHECKPOINT_NAME
+from mt import DATASETS_PATH, DATASET_CLEAN_NAME, DATASET_CLEAN_SORTED_NAME, DATASET_EVAL_NAME, DATASET_TOK_NAME, DATASET_LOGS_NAME, DATASET_CHECKPOINT_NAME
 from mt import helpers
 from mt.preprocess import utils
 from mt.trainer.datasets import TranslationDataset
@@ -64,14 +64,19 @@ torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 
 
-def run_experiment(datapath, src, trg, model_name, domain=None):
+def run_experiment(datapath, src, trg, model_name, domain=None, smart_batch=False):
     start_time = time.time()
 
     # Load tokenizers
     src_tok, trg_tok = helpers.get_tokenizers(os.path.join(datapath, DATASET_TOK_NAME, TOK_FOLDER), src, trg, tok_model=TOK_MODEL, lower=LOWERCASE)
 
     # Load dataset
-    test_ds = TranslationDataset(os.path.join(datapath, DATASET_CLEAN_NAME), src_tok, trg_tok, "test")
+    datapath_clean = DATASET_CLEAN_SORTED_NAME if smart_batch else DATASET_CLEAN_NAME
+    if TOK_MODEL == "bpe":  # Do not preprocess again when using bpe
+        src_tok.apply_bpe = False
+        trg_tok.apply_bpe = False
+        datapath_clean = os.path.join(DATASET_TOK_NAME, TOK_FOLDER)
+    test_ds = TranslationDataset(os.path.join(datapath, datapath_clean), src_tok, trg_tok, "test")
 
     kwargs_test = {}
     if SAMPLER_NAME == "bucket":
@@ -230,7 +235,8 @@ def get_translations(data, model, max_length=50, beam_width=3):
 if __name__ == "__main__":
     # Get all folders in the root path
     # datasets = [os.path.join(DATASETS_PATH, x) for x in ["health_es-en", "biological_es-en", "merged_es-en"]]
-    datasets = [os.path.join(DATASETS_PATH, "multi30k_de-en")]
+    #datasets = [os.path.join(DATASETS_PATH, "multi30k_de-en")]
+    datasets = [os.path.join(DATASETS_PATH, "health_es-en")]
     for dataset in datasets:
         domain, (src, trg) = utils.get_dataset_ids(dataset)
         fname_base = f"{domain}_{src}-{trg}"
