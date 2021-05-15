@@ -51,7 +51,7 @@ TOK_MODEL = "wt"
 TOK_SIZE = 16000
 TOK_FOLDER = f"{TOK_MODEL}.{TOK_SIZE}"
 LOWERCASE = True
-SAMPLER_NAME = "maxtokens"
+SAMPLER_NAME = None #"maxtokens"  # bucket # None
 
 print(f"Device #1: {DEVICE1}")
 print(f"Device #2: {DEVICE2}")
@@ -69,11 +69,9 @@ torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 
 
-def func(x):
-    return x
-
-
 def run_experiment(datapath, src, trg, model_name, domain=None, smart_batch=False):
+    start_time = time.time()
+
     ###########################################################################
     ###########################################################################
 
@@ -161,6 +159,10 @@ def run_experiment(datapath, src, trg, model_name, domain=None, smart_batch=Fals
         checkpoint_path=checkpoint_path,
         tb_writer=tb_writer)
 
+    print("************************************************************")
+    epoch_hours, epoch_mins, epoch_secs = helpers.epoch_time(start_time, end_time=time.time())
+    print(f'Time experiment: {epoch_hours}h {epoch_mins}m {epoch_secs}s')
+    print("************************************************************")
     print("Done!")
 
 
@@ -302,7 +304,7 @@ def log_progress(epoch_i, start_time, tr_loss, val_loss, translations=None, tb_w
 
     # Print stuff
     end_time = time.time()
-    epoch_mins, epoch_secs = helpers.epoch_time(start_time, end_time)
+    epoch_hours, epoch_mins, epoch_secs = helpers.epoch_time(start_time, end_time)
     print("------------------------------------------------------------")
     print(f'Epoch: {epoch_i + 1:02} | Time: {epoch_mins}m {epoch_secs}s')
     print(f'\t- Train Loss: {metrics["train"]["loss"]:.3f} | Train PPL: {metrics["train"]["ppl"]:.3f}')

@@ -21,7 +21,7 @@ from mt.preprocess import utils
 from mt.trainer.datasets import TranslationDataset
 from mt.trainer.models.transformer.transformer import Transformer
 
-from mt.max_tokens_batch_sampler import MaxTokensBatchSampler
+from mt.samplers.max_tokens_batch_sampler import MaxTokensBatchSampler
 from torchnlp.samplers import BucketBatchSampler
 
 MODEL_NAME = "transformer"
@@ -64,6 +64,8 @@ torch.backends.cudnn.benchmark = False
 
 
 def run_experiment(datapath, src, trg, model_name, domain=None):
+    start_time = time.time()
+
     # Load tokenizers
     src_tok, trg_tok = helpers.get_tokenizers(os.path.join(datapath, DATASET_TOK_NAME, TOK_FOLDER), src, trg, tok_model=TOK_MODEL, lower=LOWERCASE)
 
@@ -99,11 +101,11 @@ def run_experiment(datapath, src, trg, model_name, domain=None):
     model.load_state_dict(torch.load(checkpoint_path))
 
     # Evaluate
-    start_time = time.time()
+    start_time2 = time.time()
     val_loss, translations = evaluate(model, test_loader, criterion)
 
     # Log progress
-    metrics = log_progress(start_time, val_loss, translations)
+    metrics = log_progress(start_time2, val_loss, translations)
 
     # Get bleu
     src_dec_all, hyp_dec_all, ref_dec_all = get_translations(test_loader, model, max_length=MAX_LENGTH, beam_width=BEAM_WIDTH)
@@ -128,6 +130,12 @@ def run_experiment(datapath, src, trg, model_name, domain=None):
     with open(os.path.join(eval_path, 'ref.txt'), 'w') as f:
         f.writelines("%s\n" % s for s in ref_dec_all)
     print("Translations written!")
+
+    print("************************************************************")
+    epoch_hours, epoch_mins, epoch_secs = helpers.epoch_time(start_time, end_time=time.time())
+    print(f'Time experiment: {epoch_hours}h {epoch_mins}m {epoch_secs}s')
+    print("************************************************************")
+    print("Done!")
 
 
 def evaluate(model, data_loader, criterion):
@@ -181,7 +189,7 @@ def log_progress(start_time, val_loss, translations=None):
 
     # Print stuff
     end_time = time.time()
-    epoch_mins, epoch_secs = helpers.epoch_time(start_time, end_time)
+    epoch_hours, epoch_mins, epoch_secs = helpers.epoch_time(start_time, end_time)
     print("------------------------------------------------------------")
     print(f'Evaluate | Time: {epoch_mins}m {epoch_secs}s')
     print(f'\t- Val Loss: {metrics["val"]["loss"]:.3f} | Val PPL: {metrics["val"]["ppl"]:.3f} | Val BLEU: {metrics["val"]["bleu"]:.3f}')

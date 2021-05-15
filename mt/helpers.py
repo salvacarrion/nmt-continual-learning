@@ -142,6 +142,6 @@ def get_translations(src, trg, trg_pred, src_tok, trg_tok):
 
 def epoch_time(start_time, end_time):
     elapsed_time = end_time - start_time
-    elapsed_mins = int(elapsed_time / 60)
-    elapsed_secs = int(elapsed_time - (elapsed_mins * 60))
-    return elapsed_mins, elapsed_secs
+    elapsed_mins, elapsed_secs = divmod(elapsed_time, 60)
+    elapsed_hours, elapsed_mins = divmod(elapsed_mins, 60)
+    return elapsed_hours, elapsed_mins, elapsed_secs
