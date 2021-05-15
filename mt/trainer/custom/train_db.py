@@ -19,10 +19,13 @@ import torchtext
 from torchtext.legacy.datasets import Multi30k
 from torchtext.legacy.data import Field, BucketIterator
 
+from mt.max_tokens_batch_sampler import MaxTokensBatchSampler
 from torchnlp.samplers import BucketBatchSampler
 from torchnlp.utils import collate_tensors
 from torchnlp.encoders.text import stack_and_pad_tensors
-from allennlp.data.samplers import max_tokens_batch_sampler
+# from allennlp.data.samplers.max_tokens_batch_sampler import MaxTokensBatchSampler
+# from allennlp.data import DataLoader
+# from allennlp.data.samplers import BatchSampler, BucketBatchSampler, MaxTokensBatchSampler
 
 import sacrebleu
 from datasets import load_metric
@@ -49,7 +52,7 @@ WANDB_PROJECT = "nmt"  # Run "wandb login" in the terminal
 MAX_EPOCHS = 10
 LEARNING_RATE = 0.5e-3
 BATCH_SIZE = 128 #int(32*1.5)
-MAX_TOKENS = 9999999#4096 #int(4096*1.5)
+MAX_TOKENS = 1024#4096 #int(4096*1.5)
 WARMUP_UPDATES = 4000
 PATIENCE = 5
 ACC_GRADIENTS = 1
@@ -121,8 +124,8 @@ def run_experiment(datapath, src, trg, model_name, domain=None, smart_batch=Fals
     train_ds = TranslationDataset(os.path.join(datapath, datapath_clean), src_tok, trg_tok, "train")
     val_ds = TranslationDataset(os.path.join(datapath, datapath_clean), src_tok, trg_tok, "val")
 
-    train_sampler = BucketBatchSampler(SequentialSampler(train_ds), batch_size=BATCH_SIZE, drop_last=False, sort_key=lambda i: len(train_ds.datasets.iloc[i]["src"].split()))
-    val_sampler = BucketBatchSampler(SequentialSampler(val_ds), batch_size=BATCH_SIZE, drop_last=False, sort_key=lambda i: len(val_ds.datasets.iloc[i]["src"].split()))
+    train_sampler = MaxTokensBatchSampler(SequentialSampler(train_ds), batch_size=BATCH_SIZE, max_tokens=MAX_TOKENS, drop_last=False, sort_key=lambda i: len(train_ds.datasets.iloc[i]["src"].split()))
+    val_sampler = MaxTokensBatchSampler(SequentialSampler(val_ds), batch_size=BATCH_SIZE,  max_tokens=MAX_TOKENS, drop_last=False, sort_key=lambda i: len(val_ds.datasets.iloc[i]["src"].split()))
     train_loader = DataLoader(train_ds, num_workers=NUM_WORKERS, collate_fn=lambda x: TranslationDataset.collate_fn(x, MAX_TOKENS), pin_memory=True, batch_sampler=train_sampler)
     val_loader = DataLoader(val_ds, num_workers=NUM_WORKERS, collate_fn=lambda x: TranslationDataset.collate_fn(x, MAX_TOKENS), pin_memory=True, batch_sampler=val_sampler)
 
@@ -147,7 +150,7 @@ def run_experiment(datapath, src, trg, model_name, domain=None, smart_batch=Fals
 
     # Tensorboard (it needs some epochs to start working ~10-20)
     tb_writer = SummaryWriter(os.path.join(datapath, DATASET_LOGS_NAME, f"{model_name}"))
-    wandb.watch(model)
+    # wandb.watch(model)
 
     # Train and validate model
     fit(model, optimizer, train_loader=train_loader, val_loader=val_loader,
