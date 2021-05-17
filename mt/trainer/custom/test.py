@@ -40,10 +40,10 @@ MULTIGPU = False
 DEVICE1 = torch.device("cuda" if torch.cuda.is_available() else "cpu")  # torch.device("cpu") #
 DEVICE2 = None  #torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 NUM_WORKERS = 0
-TOK_MODEL = "wt"
+TOK_MODEL = "bpe"
 TOK_SIZE = 16000
 TOK_FOLDER = f"{TOK_MODEL}.{TOK_SIZE}"
-LOWERCASE = True
+LOWERCASE = False
 SAMPLER_NAME = "maxtokens"
 MAX_LENGTH = 50
 BEAM_WIDTH = 3
@@ -98,9 +98,9 @@ def run_experiment(datapath, src, trg, model_name, domain=None, smart_batch=Fals
                         enc_heads=8, dec_heads=8,
                         enc_dff_dim=512, dec_dff_dim=512,
                         enc_dropout=0.1, dec_dropout=0.1,
-                        max_src_len=200, max_trg_len=200,
+                        max_src_len=2000, max_trg_len=2000,
                         src_tok=src_tok, trg_tok=trg_tok,
-                        static_pos_emb=False).to(DEVICE1)
+                        static_pos_emb=True).to(DEVICE1)
     print(f'The model has {model.count_parameters():,} trainable parameters')
     criterion = nn.CrossEntropyLoss(ignore_index=trg_tok.word2idx[trg_tok.PAD_WORD])
 
@@ -235,8 +235,8 @@ def get_translations(data, model, max_length=50, beam_width=3):
 if __name__ == "__main__":
     # Get all folders in the root path
     # datasets = [os.path.join(DATASETS_PATH, x) for x in ["health_es-en", "biological_es-en", "merged_es-en"]]
-    #datasets = [os.path.join(DATASETS_PATH, "multi30k_de-en")]
-    datasets = [os.path.join(DATASETS_PATH, "health_es-en")]
+    datasets = [os.path.join(DATASETS_PATH, "multi30k_de-en")]
+    # datasets = [os.path.join(DATASETS_PATH, "health_es-en")]
     for dataset in datasets:
         domain, (src, trg) = utils.get_dataset_ids(dataset)
         fname_base = f"{domain}_{src}-{trg}"

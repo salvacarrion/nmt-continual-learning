@@ -35,8 +35,8 @@ WANDB_PROJECT = "nmt"  # Run "wandb login" in the terminal
 
 MAX_EPOCHS = 50
 LEARNING_RATE = 0.5e-3
-BATCH_SIZE = 128 #int(32*1.5)
-MAX_TOKENS = 4096 #int(4096*1.5)
+BATCH_SIZE = 64 #int(32*1.5)
+MAX_TOKENS = 2048 #int(4096*1.5)
 WARMUP_UPDATES = 4000
 PATIENCE = 10
 ACC_GRADIENTS = 1  # Tricky. It can hurt the training.
@@ -50,7 +50,7 @@ TOK_MODEL = "bpe"
 TOK_SIZE = 16000
 TOK_FOLDER = f"{TOK_MODEL}.{TOK_SIZE}"
 LOWERCASE = False
-SAMPLER_NAME = "maxtokens" #"maxtokens"  # bucket # None
+SAMPLER_NAME = "bucket" #"maxtokens"  # bucket # None
 
 print(f"Device #1: {DEVICE1}")
 print(f"Device #2: {DEVICE2}")
