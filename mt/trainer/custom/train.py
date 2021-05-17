@@ -33,7 +33,7 @@ from mt.samplers.max_tokens_batch_sampler import MaxTokensBatchSampler
 MODEL_NAME = "transformer"
 WANDB_PROJECT = "nmt"  # Run "wandb login" in the terminal
 
-MAX_EPOCHS = 20
+MAX_EPOCHS = 50
 LEARNING_RATE = 0.5e-3
 BATCH_SIZE = 128 #int(32*1.5)
 MAX_TOKENS = 4096 #int(4096*1.5)
