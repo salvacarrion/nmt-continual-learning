@@ -10,7 +10,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
-from torch.utils.data.sampler import SequentialSampler
 
 import torchtext
 from torch.utils.data import DataLoader
@@ -22,8 +21,9 @@ from mt.preprocess import utils
 from mt.trainer.datasets import TranslationDataset
 from mt.trainer.models.transformer.transformer import Transformer
 
-from mt.samplers.max_tokens_batch_sampler import MaxTokensBatchSampler
+from torch.utils.data.sampler import SequentialSampler
 from torchnlp.samplers import BucketBatchSampler
+from mt.samplers.max_tokens_batch_sampler import MaxTokensBatchSampler
 
 MODEL_NAME = "transformer"
 

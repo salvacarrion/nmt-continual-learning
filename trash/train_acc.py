@@ -13,6 +13,10 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data import DataLoader
+from torch.utils.data.sampler import SequentialSampler
+
+from torchnlp.samplers import BucketBatchSampler
+from accelerate import Accelerator
 
 import sacrebleu
 from datasets import load_metric
@@ -25,13 +29,13 @@ from mt import helpers
 from mt.trainer.datasets import TranslationDataset
 from mt import DATASETS_PATH, DATASET_CLEAN_NAME, DATASET_CLEAN_SORTED_NAME, DATASET_TOK_NAME, DATASET_LOGS_NAME, DATASET_CHECKPOINT_NAME
 from mt.trainer.models.transformer.transformer import Transformer
-
-from torch.utils.data.sampler import SequentialSampler
-from torchnlp.samplers import BucketBatchSampler
 from mt.samplers.max_tokens_batch_sampler import MaxTokensBatchSampler
+
 
 MODEL_NAME = "transformer"
 WANDB_PROJECT = "nmt"  # Run "wandb login" in the terminal
+accelerator = Accelerator()
+
 
 MAX_EPOCHS = 20
 LEARNING_RATE = 0.5e-3
@@ -52,9 +56,10 @@ TOK_FOLDER = f"{TOK_MODEL}.{TOK_SIZE}"
 LOWERCASE = False
 SAMPLER_NAME = "maxtokens" #"maxtokens"  # bucket # None
 
-print(f"Device #1: {DEVICE1}")
-print(f"Device #2: {DEVICE2}")
-print(f"CUDA devices count: {torch.cuda.device_count()}")
+# print(f"Device #1: {DEVICE1}")
+# print(f"Device #2: {DEVICE2}")
+# print(f"CUDA devices count: {torch.cuda.device_count()}")
+print(f"Accelerator device: {accelerator.device}")
 
 ###########################################################################
 ###########################################################################
@@ -93,8 +98,8 @@ def run_experiment(datapath, src, trg, model_name, domain=None, smart_batch=Fals
     config.weight_decay = WEIGHT_DECAY
     config.clip_gradients = CLIP_GRADIENTS
     config.multigpu = MULTIGPU
-    config.device1 = str(DEVICE1)
-    config.device2 = str(DEVICE2)
+    # config.device1 = str(DEVICE1)
+    # config.device2 = str(DEVICE2)
     config.num_workers = NUM_WORKERS
     config.tok_model = TOK_MODEL
     config.tok_size = TOK_SIZE
@@ -152,7 +157,7 @@ def run_experiment(datapath, src, trg, model_name, domain=None, smart_batch=Fals
                         enc_dropout=0.1, dec_dropout=0.1,
                         max_src_len=2000, max_trg_len=2000,
                         src_tok=src_tok, trg_tok=trg_tok,
-                        static_pos_emb=True).to(DEVICE1)
+                        static_pos_emb=True)#.to(DEVICE1)
     model.apply(initialize_weights)
     print(f'The model has {model.count_parameters():,} trainable parameters')
     criterion = nn.CrossEntropyLoss(ignore_index=trg_tok.word2idx[trg_tok.PAD_WORD])
@@ -167,10 +172,14 @@ def run_experiment(datapath, src, trg, model_name, domain=None, smart_batch=Fals
     tb_writer = SummaryWriter(os.path.join(datapath, DATASET_LOGS_NAME, f"{model_name}"))
     wandb.watch(model)
 
+    # Prepare model and data for acceleration
+    model, optimizer, train_loader, val_loader = accelerator.prepare(model, optimizer, train_loader, val_loader)
+
     # Train and validate model
     fit(model, optimizer, train_loader=train_loader, val_loader=val_loader,
         epochs=MAX_EPOCHS, criterion=criterion,
         checkpoint_path=checkpoint_path,
+        src_tok=src_tok, trg_tok=trg_tok,
         tb_writer=tb_writer)
 
     print("************************************************************")
@@ -185,7 +194,7 @@ def initialize_weights(m):
         nn.init.xavier_uniform_(m.weight.data)
 
 
-def fit(model, optimizer, train_loader, val_loader, epochs, criterion, checkpoint_path, tb_writer=None):
+def fit(model, optimizer, train_loader, val_loader, epochs, criterion, checkpoint_path, src_tok, trg_tok, tb_writer=None):
     if not checkpoint_path:
         print("[WARNING] Training without a checkpoint path. The model won't be saved.")
 
@@ -197,23 +206,23 @@ def fit(model, optimizer, train_loader, val_loader, epochs, criterion, checkpoin
         # Train model
         tr_loss = train(model, optimizer, train_loader, criterion)
 
-        # Evaluate
-        val_loss, translations = evaluate(model, val_loader, criterion)
-
-        # Log progress
-        metrics = log_progress(epoch_i, start_time, tr_loss, val_loss, translations, tb_writer)
-
-        # Checkpoint
-        new_best_score = save_checkpoint(model, checkpoint_path, metrics, best_score)
-        last_checkpoint = epoch_i if best_score != new_best_score else last_checkpoint
-        best_score = new_best_score
-
-        # Early stop
-        if PATIENCE != -1 and (epoch_i - last_checkpoint) >= PATIENCE:
-            print(f"************************************************************************")
-            print(f"*** Early stop. Validation loss didn't improve for {PATIENCE} epochs ***")
-            print(f"************************************************************************")
-            break
+        # # Evaluate
+        # val_loss, translations = evaluate(model, val_loader, criterion, src_tok, trg_tok)
+        #
+        # # Log progress
+        # metrics = log_progress(epoch_i, start_time, tr_loss, val_loss, translations, tb_writer)
+        #
+        # # Checkpoint
+        # new_best_score = save_checkpoint(model, checkpoint_path, metrics, best_score)
+        # last_checkpoint = epoch_i if best_score != new_best_score else last_checkpoint
+        # best_score = new_best_score
+        #
+        # # Early stop
+        # if PATIENCE != -1 and (epoch_i - last_checkpoint) >= PATIENCE:
+        #     print(f"************************************************************************")
+        #     print(f"*** Early stop. Validation loss didn't improve for {PATIENCE} epochs ***")
+        #     print(f"************************************************************************")
+        #     break
 
 
 def save_checkpoint(model, checkpoint_path, metrics, best_score):
@@ -237,39 +246,43 @@ def train(model, optimizer, data_loader, criterion):
     model.train()
     optimizer.zero_grad()
     for i, batch in tqdm(enumerate(data_loader), total=len(data_loader)):
-        try:
-            # Get batch data
-            src, src_mask, trg, trg_mask = [x.to(DEVICE1) for x in batch]
-            batch_size, src_max_len, trg_max_len = src.shape[0], src.shape[1], trg.shape[1]
-
-            # Get output
-            output, _ = model(src, src_mask, trg[:, :-1], trg_mask[:, :-1])
-            output_dim = output.shape[-1]
-            output = output.contiguous().view(-1, output_dim)
-            trg = trg[:, 1:].contiguous().view(-1).long()
-
-            # Compute loss
-            loss = criterion(output, trg) / ACC_GRADIENTS  # Normalize loss
-            loss.backward()
-
-            # Track total loss
-            epoch_loss += loss.item()
-
-            # Accumulate gradients
-            if (i+1) % ACC_GRADIENTS == 0 or (i+1) == len(data_loader):
-                # Clip gradients
-                if CLIP_GRADIENTS > 0:
-                    torch.nn.utils.clip_grad_norm_(model.parameters(), CLIP_GRADIENTS)
-                optimizer.step()
-                optimizer.zero_grad()
-        except RuntimeError as e:
-            print("ERROR BATCH: " + str(i+1))
-            print(e)
+        print(batch)
+        pass
+        # try:
+        #     # Get batch data
+        #     src, src_mask, trg, trg_mask = batch
+        #     # src, src_mask, trg, trg_mask = [x.to(DEVICE1) for x in batch]
+        #     batch_size, src_max_len, trg_max_len = src.shape[0], src.shape[1], trg.shape[1]
+        #
+        #     # Get output
+        #     output, _ = model(src, src_mask, trg[:, :-1], trg_mask[:, :-1])
+        #     output_dim = output.shape[-1]
+        #     output = output.contiguous().view(-1, output_dim)
+        #     trg = trg[:, 1:].contiguous().view(-1).long()
+        #
+        #     # Compute loss
+        #     loss = criterion(output, trg) / ACC_GRADIENTS  # Normalize loss
+        #     # loss.backward()
+        #     accelerator.backward(loss)
+        #
+        #     # Track total loss
+        #     epoch_loss += loss.item()
+        #
+        #     # Accumulate gradients
+        #     if (i+1) % ACC_GRADIENTS == 0 or (i+1) == len(data_loader):
+        #         # Clip gradients
+        #         if CLIP_GRADIENTS > 0:
+        #             torch.nn.utils.clip_grad_norm_(model.parameters(), CLIP_GRADIENTS)
+        #         optimizer.step()
+        #         optimizer.zero_grad()
+        # except RuntimeError as e:
+        #     print("ERROR BATCH: " + str(i+1))
+        #     print(e)
 
     return epoch_loss / len(data_loader)
 
 
-def evaluate(model, data_loader, criterion):
+def evaluate(model, data_loader, criterion, src_tok, trg_tok):
     epoch_loss = 0
     src_dec_all, hyp_dec_all, ref_dec_all = [], [], []
 
@@ -278,7 +291,8 @@ def evaluate(model, data_loader, criterion):
         try:
             with torch.no_grad():
                 # Get batch data
-                src, src_mask, trg, trg_mask = [x.to(DEVICE1) for x in batch]
+                src, src_mask, trg, trg_mask = batch
+                # src, src_mask, trg, trg_mask = [x.to(DEVICE1) for x in batch]
 
                 # Get output
                 # output, _ = model(src, trg[:, :-1])
@@ -291,9 +305,9 @@ def evaluate(model, data_loader, criterion):
                 epoch_loss += loss.item()
 
                 # Generate translations (fast)
-                hyp_dec_all += model.trg_tok.decode(output.argmax(2), remove_special_tokens=True)
-                ref_dec_all += model.trg_tok.decode(trg, remove_special_tokens=True)
-                src_dec_all += model.src_tok.decode(src, remove_special_tokens=True)
+                hyp_dec_all += trg_tok.decode(output.argmax(2), remove_special_tokens=True)
+                ref_dec_all += trg_tok.decode(trg, remove_special_tokens=True)
+                src_dec_all += src_tok.decode(src, remove_special_tokens=True)
         except RuntimeError as e:
             print("ERROR BATCH: " + str(i+1))
             print(e)

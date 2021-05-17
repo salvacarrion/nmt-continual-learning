@@ -16,11 +16,11 @@ sacrebleu==1.5.1
 sacremoses==0.0.44
 tensorboardX==2.2
 
-pandas==1.2.3
-tqdm==4.49.0
+pandas>=1.2.3
+tqdm>=4.49.0
 
-matplotlib==3.4.1
-seaborn==0.11.1
+matplotlib>=3.4.1
+seaborn>=0.11.1
 
 jupyter==1.0.0
 
@@ -30,4 +30,4 @@ jupyter==1.0.0
 einops==0.3.0
 torchtext==0.9.1
 torchmetrics==0.2.0
-wandb==0.10.29
+wandb>=0.10.30

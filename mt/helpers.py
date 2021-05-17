@@ -6,9 +6,9 @@ from torch.utils.data import DataLoader
 
 from datasets import Dataset
 
-from trainer.tok.word_tokenizer import WordTokenizer
-from trainer.tok.lit_tokenizer import LitTokenizer
-from trainer.tok.fastbpe_tokenizer import FastBPETokenizer
+from mt.trainer.tok.word_tokenizer import WordTokenizer
+from mt.trainer.tok.lit_tokenizer import LitTokenizer
+from mt.trainer.tok.fastbpe_tokenizer import FastBPETokenizer
 from tqdm import tqdm
 
 
