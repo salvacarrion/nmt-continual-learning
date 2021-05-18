@@ -39,7 +39,7 @@ accelerator = Accelerator()
 
 MAX_EPOCHS = 50
 LEARNING_RATE = 0.5e-3
-BATCH_SIZE = 128 #int(32*1.5)
+BATCH_SIZE = 64 #int(32*1.5)
 MAX_TOKENS = 4096 #int(4096*1.5)
 WARMUP_UPDATES = 4000
 PATIENCE = 10
@@ -49,7 +49,7 @@ CLIP_GRADIENTS = 1.0
 MULTIGPU = False
 DEVICE1 = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")  # torch.device("cpu") #
 DEVICE2 = None  #torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-NUM_WORKERS = 0
+NUM_WORKERS = 8
 TOK_MODEL = "bpe"
 TOK_SIZE = 16000
 TOK_FOLDER = f"{TOK_MODEL}.{TOK_SIZE}"
@@ -359,8 +359,8 @@ def log_progress(epoch_i, start_time, tr_loss, val_loss, translations=None, tb_w
 
 if __name__ == "__main__":
     # Get all folders in the root path
-    # datasets = [os.path.join(DATASETS_PATH, x) for x in ["health_es-en", "biological_es-en", "merged_es-en"]]
-    datasets = [os.path.join(DATASETS_PATH, "multi30k_de-en")]
+    datasets = [os.path.join(DATASETS_PATH, x) for x in ["health_es-en", "biological_es-en", "merged_es-en"]]
+    # datasets = [os.path.join(DATASETS_PATH, "multi30k_de-en")]
     # datasets = [os.path.join(DATASETS_PATH, "health_es-en")]
     for dataset in datasets:
         domain, (src, trg) = utils.get_dataset_ids(dataset)

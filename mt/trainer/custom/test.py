@@ -114,7 +114,7 @@ def run_experiment(datapath, src, trg, model_name, domain=None, smart_batch=Fals
     val_loss, translations = evaluate(model, test_loader, criterion)
 
     # Log progress
-    metrics = log_progress(start_time2, val_loss, translations)
+    metrics = log_progress(start_time2, val_loss, translations, print_translations=True)
 
     # Get bleu
     src_dec_all, hyp_dec_all, ref_dec_all = get_translations(test_loader, model, max_length=MAX_LENGTH, beam_width=BEAM_WIDTH)
@@ -185,7 +185,7 @@ def evaluate(model, data_loader, criterion):
     return epoch_loss / len(data_loader), (src_dec_all, hyp_dec_all, ref_dec_all)
 
 
-def log_progress(start_time, val_loss, translations=None):
+def log_progress(start_time, val_loss, translations=None, print_translations=True):
     metrics = {
         "val": {
             "loss": val_loss,
@@ -200,7 +200,8 @@ def log_progress(start_time, val_loss, translations=None):
         metrics["val"]["bleu"] = m_bleu_score*100
 
         # Print translations
-        helpers.print_translations(hyp_dec_all, ref_dec_all, src_dec_all, limit=50)
+        if print_translations:
+            helpers.print_translations(hyp_dec_all, ref_dec_all, src_dec_all, limit=50, randomized=True)
 
     # Print stuff
     end_time = time.time()

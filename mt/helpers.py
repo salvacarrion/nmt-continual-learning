@@ -1,5 +1,6 @@
 import os
 import pandas as pd
+import random
 
 import torch
 from torch.utils.data import DataLoader
@@ -93,20 +94,31 @@ def build_dataloader(dataset, src_tok, trg_tok, tokenizer_class, batch_size=1, m
     return ds_loader
 
 
-def print_translations(hypothesis, references, source=None, limit=None):
+def print_translations(hypothesis, references, source=None, limit=None, randomized=False):
     print("")
     print("Translations: ")
+
+    # Randomize elements
+    indices = list(range(len(hypothesis)))
+    if randomized:
+        random.shuffle(indices)
+
+    # Set limit
+    indices = indices[:limit] if limit else indices
+
+    # Create fake source if there isn't any
     source = source if source else [None]*len(hypothesis)
-    for i, (src, hyp, ref) in enumerate(zip(source, hypothesis, references)):
-        print(f"Translation #{i+1}: ")
+
+    # Print translations
+    for i, idx in enumerate(indices):
+        (src, hyp, ref) = source[idx], hypothesis[idx], references[idx]
+
+        print(f"Translation #{i+1} (idx={idx}): ")
         if src:
             print("\t- Src: " + src)
         print("\t- Ref: " + ref)
         print("\t- Hyp: " + hyp)
 
-        # Set limit
-        if limit and i+1 >= limit:
-            break
 
 
 def generate_translations(model, trg_tok, data_loader, max_length, beam_width):
