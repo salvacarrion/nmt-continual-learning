@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 
 from mt import DATASETS_PATH, DATASET_CLEAN_NAME, DATASET_TOK_NAME, VOCAB_SIZE
-from mt.preprocess import utils
+from mt import utils
 
 from trainer.tok.lit_tokenizer import LitTokenizer
 from trainer.tok.word_tokenizer import WordTokenizer

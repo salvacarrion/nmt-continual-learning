@@ -4,7 +4,7 @@ from pathlib import Path
 import numpy as np
 
 from mt import RAW_PATH
-from mt.preprocess import utils
+from mt import utils
 
 SUFFLE = True
 CONSTRAINED = True

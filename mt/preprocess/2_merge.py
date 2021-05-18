@@ -2,7 +2,7 @@ import os
 import pandas as pd
 
 from mt import RAW_PATH
-from mt.preprocess import utils
+from mt import utils
 
 
 TR_RAW_FILES = [("es-en-gma-biological.csv", "es-en-gma-health.csv"),

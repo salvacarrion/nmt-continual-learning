@@ -17,13 +17,14 @@ from tqdm import tqdm
 
 from mt import DATASETS_PATH, DATASET_CLEAN_NAME, DATASET_CLEAN_SORTED_NAME, DATASET_EVAL_NAME, DATASET_TOK_NAME, DATASET_LOGS_NAME, DATASET_CHECKPOINT_NAME
 from mt import helpers
-from mt.preprocess import utils
-from mt.trainer.datasets import TranslationDataset
+from mt import utils
+from mt.dataloaders.datasets import TranslationDataset
+
 from mt.trainer.models.transformer.transformer import Transformer
 
 from torch.utils.data.sampler import SequentialSampler
 from torchnlp.samplers import BucketBatchSampler
-from mt.samplers.max_tokens_batch_sampler import MaxTokensBatchSampler
+from mt.dataloaders.max_tokens_batch_sampler import MaxTokensBatchSampler
 
 MODEL_NAME = "transformer"
 
@@ -44,6 +45,8 @@ TOK_MODEL = "bpe"
 TOK_SIZE = 16000
 TOK_FOLDER = f"{TOK_MODEL}.{TOK_SIZE}"
 LOWERCASE = False
+TRUNCATE = True
+MAX_LENGTH_TRUNC = 2000
 SAMPLER_NAME = "maxtokens"
 MAX_LENGTH = 50
 BEAM_WIDTH = 3
@@ -68,7 +71,8 @@ def run_experiment(datapath, src, trg, model_name, domain=None, smart_batch=Fals
     start_time = time.time()
 
     # Load tokenizers
-    src_tok, trg_tok = helpers.get_tokenizers(os.path.join(datapath, DATASET_TOK_NAME, TOK_FOLDER), src, trg, tok_model=TOK_MODEL, lower=LOWERCASE)
+    src_tok, trg_tok = helpers.get_tokenizers(os.path.join(datapath, DATASET_TOK_NAME, TOK_FOLDER), src, trg,
+                                              tok_model=TOK_MODEL, lower=LOWERCASE, truncation=TRUNCATE, max_length=MAX_LENGTH_TRUNC)
 
     # Load dataset
     datapath_clean = DATASET_CLEAN_SORTED_NAME if smart_batch else DATASET_CLEAN_NAME

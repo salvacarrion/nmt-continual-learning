@@ -7,8 +7,8 @@ import json
 
 from mt import DATASETS_PATH, DATASET_TOK_NAME, DATASET_SUMMARY_NAME, DATASET_CLEAN_NAME
 from mt import helpers
-from mt.preprocess import utils
-from mt.trainer.datasets import TranslationDataset
+from mt import utils
+from mt.dataloaders.datasets import TranslationDataset
 
 import pandas as pd
 import numpy as np
@@ -22,7 +22,7 @@ TOK_FOLDER = f"{TOK_MODEL}.{TOK_SIZE}"
 LOWERCASE = False
 
 
-def get_lengths(datapath, src, trg, domain=None):
+def get_lengths(datapath, src, trg):
     # Load tokenizers
     src_tok, trg_tok = helpers.get_tokenizers(os.path.join(datapath, DATASET_TOK_NAME, TOK_FOLDER), src, trg, tok_model=TOK_MODEL, lower=LOWERCASE)
 
@@ -97,7 +97,7 @@ if __name__ == "__main__":
         print(f"Getting lengths dataset ({fname_base})...")
 
         # Get lengths
-        lengths = get_lengths(dataset, src, trg, domain=dataset_name)
+        lengths = get_lengths(dataset, src, trg)
         row = {"dataset": fname_base, "dataset_name": dataset_name, "domain": domain, "langs": f"{src}-{trg}", "tok_model": TOK_MODEL, "tok_size": TOK_SIZE,
 
                "train_src_sentences": len(lengths["train_src_lengths"]),

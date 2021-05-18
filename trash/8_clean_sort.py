@@ -3,7 +3,7 @@ from pathlib import Path
 import subprocess
 
 from mt import DATASETS_PATH, DATASET_CLEAN_NAME, DATASET_CLEAN_SORTED_NAME
-from mt.preprocess import utils
+from mt import utils
 
 # Get all folders in the root path
 datasets = [os.path.join(DATASETS_PATH, name) for name in os.listdir(DATASETS_PATH) if os.path.isdir(os.path.join(DATASETS_PATH, name))]

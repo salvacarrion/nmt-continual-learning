@@ -3,7 +3,7 @@ from pathlib import Path
 import subprocess
 
 from mt import DATASETS_PATH, DATASET_TOK_NAME, DATASET_BPE_NAME, FASTBPE_PATH, VOCAB_SIZE
-from mt.preprocess import utils
+from mt import utils
 
 
 # Get all folders in the root path

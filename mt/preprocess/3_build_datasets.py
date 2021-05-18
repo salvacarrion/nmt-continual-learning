@@ -5,7 +5,7 @@ from pathlib import Path
 from sklearn.model_selection import train_test_split
 
 from mt import RAW_PATH, DATASETS_PATH, DATASET_RAW_NAME
-from mt.preprocess import utils
+from mt import utils
 
 SUFFLE = True
 FORCE_BIDIRECTIONAL = False  # (es-en) => [(es-en), (en-es)]

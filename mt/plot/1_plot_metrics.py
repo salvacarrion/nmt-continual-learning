@@ -6,8 +6,7 @@ from pathlib import Path
 import json
 
 from mt import DATASETS_PATH, DATASET_EVAL_NAME, DATASET_SUMMARY_NAME
-from mt import helpers
-from mt.preprocess import utils
+from mt import helpers, utils
 
 import pandas as pd
 import numpy as np
