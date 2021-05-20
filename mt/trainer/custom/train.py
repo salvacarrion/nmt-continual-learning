@@ -54,6 +54,7 @@ LOWERCASE = False
 TRUNCATE = True
 MAX_LENGTH_TRUNC = 2000
 SAMPLER_NAME = "maxtokens" #"maxtokens"  # bucket # None
+START_FROM_CHECKPOINT = "transformer_health_best.pt"
 
 print(f"Device #1: {DEVICE1}")
 print(f"Device #2: {DEVICE2}")
@@ -106,6 +107,7 @@ def run_experiment(datapath, src, trg, model_name, domain=None, smart_batch=Fals
     config.truncate = TRUNCATE
     config.max_length_truncate = MAX_LENGTH_TRUNC
     config.sampler_name = str(SAMPLER_NAME)
+    config.start_from_checkpoint = START_FROM_CHECKPOINT
     print(config)
     ###########################################################################
     ###########################################################################
@@ -165,9 +167,10 @@ def run_experiment(datapath, src, trg, model_name, domain=None, smart_batch=Fals
     optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
 
     # Load weights
-    # checkpoint_path = os.path.join(datapath, DATASET_CHECKPOINT_NAME, "transformer_multi30k_best_new.pt")
-    # print(f"Loading weights from: {checkpoint_path}")
-    # model.load_state_dict(torch.load(checkpoint_path))
+    if START_FROM_CHECKPOINT:
+        from_checkpoint_path = os.path.join(datapath, DATASET_CHECKPOINT_NAME, START_FROM_CHECKPOINT)
+        print(f"Loading weights from: {from_checkpoint_path}")
+        model.load_state_dict(torch.load(from_checkpoint_path))
 
     # Tensorboard (it needs some epochs to start working ~10-20)
     tb_writer = SummaryWriter(os.path.join(datapath, DATASET_LOGS_NAME, f"{model_name}"))
@@ -349,7 +352,8 @@ def log_progress(epoch_i, start_time, tr_loss, val_loss, translations=None, tb_w
 
 if __name__ == "__main__":
     # Get all folders in the root path
-    datasets = [os.path.join(DATASETS_PATH, x) for x in ["health_es-en", "biological_es-en", "merged_es-en"]]
+    # datasets = [os.path.join(DATASETS_PATH, x) for x in ["health_es-en", "biological_es-en", "merged_es-en"]]
+    datasets = [os.path.join(DATASETS_PATH, x) for x in ["health_biological_es-en"]]
     # datasets = [os.path.join(DATASETS_PATH, "multi30k_de-en")]
     # datasets = [os.path.join(DATASETS_PATH, "health_es-en")]
     for dataset in datasets:

@@ -165,7 +165,8 @@ def run_experiment(datapath, src, trg, model_name, domain=None, smart_batch=Fals
 
 if __name__ == "__main__":
     # Get all folders in the root path
-    datasets = [os.path.join(DATASETS_PATH, x) for x in ["health_es-en", "biological_es-en", "merged_es-en"]]
+    # datasets = [os.path.join(DATASETS_PATH, x) for x in ["health_es-en", "biological_es-en", "merged_es-en"]]
+    datasets = [os.path.join(DATASETS_PATH, x) for x in ["health_biological_es-en"]]
     # datasets = [os.path.join(DATASETS_PATH, "multi30k_de-en")]
     # datasets = [os.path.join(DATASETS_PATH, "health_es-en")]
     for dataset in datasets:

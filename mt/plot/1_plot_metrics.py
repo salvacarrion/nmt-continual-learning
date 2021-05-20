@@ -66,7 +66,9 @@ if __name__ == "__main__":
     lang_pair = "es-en"
     datasets = [("health_es-en", "Health"),
                 ("biological_es-en", "Biological"),
-                ("merged_es-en", "Health+Biological")]
+                ("merged_es-en", "Health+Biological"),
+                ("health_biological_es-en", "Health → Biological"),
+                ]
     datasets = [(os.path.join(DATASETS_PATH, x[0]), x[1]) for x in datasets]
     for dataset, dataset_name in datasets:
         domain, (src, trg) = utils.get_dataset_ids(dataset)
