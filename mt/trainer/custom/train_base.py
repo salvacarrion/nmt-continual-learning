@@ -23,6 +23,7 @@ from tqdm import tqdm
 from mt import utils
 from mt import helpers
 from mt.dataloaders.datasets import TranslationDataset
+from mt.trainer.custom import base
 
 from mt import DATASETS_PATH, DATASET_CLEAN_NAME, DATASET_CLEAN_SORTED_NAME, DATASET_TOK_NAME, DATASET_LOGS_NAME, DATASET_CHECKPOINT_NAME
 from mt.trainer.models.transformer.transformer import Transformer
@@ -73,11 +74,7 @@ torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 
 
-def len_func(ds, i):
-    return len(ds.datasets.iloc[i]["src"].split())
-
-
-def run_experiment(datapath, src, trg, model_name, domain=None, smart_batch=False):
+def run_experiment(datapath, src, trg, model_name, domain=None):
     start_time = time.time()
 
     ###########################################################################
@@ -119,38 +116,19 @@ def run_experiment(datapath, src, trg, model_name, domain=None, smart_batch=Fals
                                               tok_model=TOK_MODEL, lower=LOWERCASE, truncation=TRUNCATE, max_length=MAX_LENGTH_TRUNC)
 
     # Load dataset
-    datapath_clean = DATASET_CLEAN_SORTED_NAME if smart_batch else DATASET_CLEAN_NAME
+    datapath_clean = DATASET_CLEAN_NAME
     if TOK_MODEL == "bpe":  # Do not preprocess again when using bpe
         src_tok.apply_bpe = False
         trg_tok.apply_bpe = False
         datapath_clean = os.path.join(DATASET_TOK_NAME, TOK_FOLDER)
 
+    # Get datasets
     train_ds = TranslationDataset(os.path.join(datapath, datapath_clean), src_tok, trg_tok, "train")
     val_ds = TranslationDataset(os.path.join(datapath, datapath_clean), src_tok, trg_tok, "val")
 
-    # Build dataloaders
-    kwargs_train = {}
-    kwargs_val = {}
-    if SAMPLER_NAME == "bucket":
-        train_sampler = BucketBatchSampler(SequentialSampler(train_ds), batch_size=BATCH_SIZE, drop_last=False,
-                                           sort_key=lambda i: len_func(train_ds, i))
-        val_sampler = BucketBatchSampler(SequentialSampler(val_ds), batch_size=BATCH_SIZE, drop_last=False,
-                                         sort_key=lambda i: len_func(val_ds, i))
-    elif SAMPLER_NAME == "maxtokens":
-        train_sampler = MaxTokensBatchSampler(SequentialSampler(train_ds), shuffle=True, batch_size=BATCH_SIZE,
-                                              max_tokens=MAX_TOKENS, drop_last=False,
-                                              sort_key=lambda i: len_func(train_ds, i))
-        val_sampler = MaxTokensBatchSampler(SequentialSampler(val_ds), shuffle=False, batch_size=BATCH_SIZE,
-                                             max_tokens=MAX_TOKENS, drop_last=False,
-                                             sort_key=lambda i: len_func(val_ds, i))
-    else:
-        train_sampler = val_sampler = None
-        kwargs_train = {"batch_size": BATCH_SIZE, "shuffle": True}
-        kwargs_val = {"batch_size": BATCH_SIZE, "shuffle": False}
-
-    # Define dataloader
-    train_loader = DataLoader(train_ds, num_workers=NUM_WORKERS, collate_fn=lambda x: TranslationDataset.collate_fn(x, MAX_TOKENS), pin_memory=True, batch_sampler=train_sampler, **kwargs_train)
-    val_loader = DataLoader(val_ds, num_workers=NUM_WORKERS, collate_fn=lambda x: TranslationDataset.collate_fn(x, MAX_TOKENS), pin_memory=True, batch_sampler=val_sampler, **kwargs_val)
+    # Get dataloaders
+    train_loader = base.get_data_loader(SAMPLER_NAME, train_ds, BATCH_SIZE, MAX_TOKENS, NUM_WORKERS, shuffle=True)
+    val_loader = base.get_data_loader(SAMPLER_NAME, val_ds, BATCH_SIZE, MAX_TOKENS, NUM_WORKERS, shuffle=False)
 
     # Instantiate model #1
     model = Transformer(d_model=256,
@@ -161,7 +139,7 @@ def run_experiment(datapath, src, trg, model_name, domain=None, smart_batch=Fals
                         max_src_len=2000, max_trg_len=2000,
                         src_tok=src_tok, trg_tok=trg_tok,
                         static_pos_emb=True).to(DEVICE1)
-    model.apply(initialize_weights)
+    model.apply(base.initialize_weights)
     print(f'The model has {model.count_parameters():,} trainable parameters')
     criterion = nn.CrossEntropyLoss(ignore_index=trg_tok.word2idx[trg_tok.PAD_WORD])
     optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
@@ -189,11 +167,6 @@ def run_experiment(datapath, src, trg, model_name, domain=None, smart_batch=Fals
     print("Done!")
 
 
-def initialize_weights(m):
-    if hasattr(m, 'weight') and m.weight.dim() > 1:
-        nn.init.xavier_uniform_(m.weight.data)
-
-
 def fit(model, optimizer, train_loader, val_loader, epochs, criterion, checkpoint_path, tb_writer=None):
     if not checkpoint_path:
         print("[WARNING] Training without a checkpoint path. The model won't be saved.")
@@ -207,13 +180,14 @@ def fit(model, optimizer, train_loader, val_loader, epochs, criterion, checkpoin
         tr_loss = train(model, optimizer, train_loader, criterion)
 
         # Evaluate
-        val_loss, translations = evaluate(model, val_loader, criterion)
+        val_loss, translations = base.evaluate(model, val_loader, criterion, device=DEVICE1)
 
         # Log progress
-        metrics = log_progress(epoch_i, start_time, tr_loss, val_loss, translations, tb_writer)
+        metrics = base.log_progress(epoch_i=epoch_i, start_time=start_time, tr_loss=tr_loss, val_loss=val_loss,
+                                    tb_writer=tb_writer, translations=translations, print_translations=True, prefix=None)
 
         # Checkpoint
-        new_best_score = save_checkpoint(model, checkpoint_path, metrics, best_score)
+        new_best_score = base.save_checkpoint(model, checkpoint_path, metrics, best_score)
         last_checkpoint = epoch_i if best_score != new_best_score else last_checkpoint
         best_score = new_best_score
 
@@ -223,21 +197,6 @@ def fit(model, optimizer, train_loader, val_loader, epochs, criterion, checkpoin
             print(f"*** Early stop. Validation loss didn't improve for {PATIENCE} epochs ***")
             print(f"************************************************************************")
             break
-
-
-def save_checkpoint(model, checkpoint_path, metrics, best_score):
-    # Save checkpoint
-    if checkpoint_path:
-        # Save last
-        torch.save(model.state_dict(), checkpoint_path + "_last.pt")
-
-        # Save best BLEU
-        score = metrics["val"]["bleu"]
-        if score > best_score:  # Loss <; BLEU >
-            best_score = score
-            torch.save(model.state_dict(), checkpoint_path + "_best.pt")
-            print("\t=> Checkpoint saved!")
-    return best_score
 
 
 def train(model, optimizer, data_loader, criterion):
@@ -278,82 +237,10 @@ def train(model, optimizer, data_loader, criterion):
     return epoch_loss / len(data_loader)
 
 
-def evaluate(model, data_loader, criterion):
-    epoch_loss = 0
-    src_dec_all, hyp_dec_all, ref_dec_all = [], [], []
-
-    model.eval()
-    for i, batch in tqdm(enumerate(data_loader), total=len(data_loader)):
-        try:
-            with torch.no_grad():
-                # Get batch data
-                src, src_mask, trg, trg_mask = [x.to(DEVICE1) for x in batch]
-
-                # Get output
-                # output, _ = model(src, trg[:, :-1])
-                output, _ = model(src, src_mask, trg[:, :-1], trg_mask[:, :-1])
-                _output = output.contiguous().view(-1, output.shape[-1])
-                _trg = trg[:, 1:].contiguous().view(-1)
-
-                # Compute loss
-                loss = criterion(_output, _trg.long())
-                epoch_loss += loss.item()
-
-                # Generate translations (fast)
-                hyp_dec_all += model.trg_tok.decode(output.argmax(2), remove_special_tokens=True)
-                ref_dec_all += model.trg_tok.decode(trg, remove_special_tokens=True)
-                src_dec_all += model.src_tok.decode(src, remove_special_tokens=True)
-        except RuntimeError as e:
-            print("ERROR BATCH: " + str(i+1))
-            print(e)
-
-    return epoch_loss / len(data_loader), (src_dec_all, hyp_dec_all, ref_dec_all)
-
-
-def log_progress(epoch_i, start_time, tr_loss, val_loss, translations=None, tb_writer=None):
-    metrics = {
-        "train": {
-            "loss": tr_loss,
-            "ppl": math.exp(tr_loss),
-        },
-        "val": {
-            "loss": val_loss,
-            "ppl": math.exp(val_loss),
-        },
-    }
-
-    # Get additional metrics
-    if translations:
-        src_dec_all, hyp_dec_all, ref_dec_all = translations
-        m_bleu_score = bleu_score([x.split(" ") for x in hyp_dec_all], [[x.split(" ")] for x in ref_dec_all])
-        metrics["val"]["bleu"] = m_bleu_score*100
-
-        # Print translations
-        helpers.print_translations(hyp_dec_all, ref_dec_all, src_dec_all, limit=50)
-
-    # Print stuff
-    end_time = time.time()
-    epoch_hours, epoch_mins, epoch_secs = helpers.epoch_time(start_time, end_time)
-    print("------------------------------------------------------------")
-    print(f'Epoch: {epoch_i + 1:02} | Time: {epoch_mins}m {epoch_secs}s')
-    print(f'\t- Train Loss: {metrics["train"]["loss"]:.3f} | Train PPL: {metrics["train"]["ppl"]:.3f}')
-    print(f'\t- Val Loss: {metrics["val"]["loss"]:.3f} | Val PPL: {metrics["val"]["ppl"]:.3f} | Val BLEU: {metrics["val"]["bleu"]:.3f}')
-    print("------------------------------------------------------------")
-
-    # Tensorboard
-    if tb_writer:
-        for split in ["train", "val"]:
-            for k, v in metrics[split].items():
-                tb_writer.add_scalar(f'{split}_{k.lower()}', v, epoch_i+1)
-                wandb.log({f'{split}_{k.lower()}': v})
-
-    return metrics
-
-
 if __name__ == "__main__":
     # Get all folders in the root path
-    # datasets = [os.path.join(DATASETS_PATH, x) for x in ["health_es-en", "biological_es-en", "merged_es-en"]]
-    datasets = [os.path.join(DATASETS_PATH, x) for x in ["health_biological_es-en"]]
+    datasets = [os.path.join(DATASETS_PATH, x) for x in ["health_es-en", "biological_es-en", "merged_es-en"]]
+    # datasets = [os.path.join(DATASETS_PATH, x) for x in ["health_biological_es-en"]]
     # datasets = [os.path.join(DATASETS_PATH, "multi30k_de-en")]
     # datasets = [os.path.join(DATASETS_PATH, "health_es-en")]
     for dataset in datasets:
