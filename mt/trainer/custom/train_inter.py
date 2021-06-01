@@ -134,9 +134,9 @@ def run_experiment(datapath, src, trg, alpha, domain=None):
         datapath_clean = os.path.join(DATASET_TOK_NAME, TOK_FOLDER)
 
     # Get datasets
-    train_ds = TranslationDataset(os.path.join(datapath, datapath_clean), src_tok, trg_tok, "val")
-    val_ds_olddomain = TranslationDataset(os.path.join(os.path.join(DATASETS_PATH, "health_es-en"), datapath_clean), src_tok, trg_tok, "test")
-    val_ds_newdomain = TranslationDataset(os.path.join(datapath, datapath_clean), src_tok, trg_tok, "test")
+    train_ds = TranslationDataset(os.path.join(datapath, datapath_clean), src_tok, trg_tok, "train")
+    val_ds_olddomain = TranslationDataset(os.path.join(os.path.join(DATASETS_PATH, "health_es-en"), datapath_clean), src_tok, trg_tok, "val")
+    val_ds_newdomain = TranslationDataset(os.path.join(datapath, datapath_clean), src_tok, trg_tok, "val")
 
     # Get dataloaders
     train_loader = base.get_data_loader(SAMPLER_NAME, train_ds, BATCH_SIZE, MAX_TOKENS, NUM_WORKERS, shuffle=True)
