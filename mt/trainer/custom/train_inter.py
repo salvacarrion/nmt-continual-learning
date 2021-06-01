@@ -258,7 +258,8 @@ def fit(model1, model2, optimizer, train_loader, val_loader_olddomain, val_loade
 def train(model1, model2, optimizer, data_loader, criterion):
     epoch_loss = 0.0
 
-    model1.train()
+    if model1:
+        model1.train()
     model2.train()
     optimizer.zero_grad()
     for i, batch in tqdm(enumerate(data_loader), total=len(data_loader)):

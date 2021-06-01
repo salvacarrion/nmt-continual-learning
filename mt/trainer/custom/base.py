@@ -55,7 +55,7 @@ def save_checkpoint(model, checkpoint_path, metrics, best_score):
         torch.save(model.state_dict(), checkpoint_path + "_last.pt")
 
         # Save best BLEU
-        score = metrics["val"]["bleu"]
+        score = metrics["val"]["sacrebleu_bleu"]
         if score > best_score:  # Loss <; BLEU >
             best_score = score
             torch.save(model.state_dict(), checkpoint_path + "_best.pt")
