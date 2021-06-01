@@ -38,7 +38,7 @@ LOWERCASE = False
 TRUNCATE = True
 MAX_LENGTH_TRUNC = 2000
 SAMPLER_NAME = "maxtokens"
-MAX_LENGTH = 200  # Mimimal impact in performance
+MAX_LENGTH = 200  # Minimal impact in performance
 BEAM_WIDTH = 1
 PRINT_TRANSLATIONS = True
 
