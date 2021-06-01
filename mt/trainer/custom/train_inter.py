@@ -40,8 +40,8 @@ WANDB_PROJECT = "nmt"  # Run "wandb login" in the terminal
 
 MAX_EPOCHS = 50
 LEARNING_RATE = 0.5e-3
-BATCH_SIZE = 64 #int(32*1.5)
-MAX_TOKENS = 1024 #int(4096*1.5)
+BATCH_SIZE = 128 #int(32*1.5)
+MAX_TOKENS = 2048 #int(4096*1.5)
 WARMUP_UPDATES = 4000
 PATIENCE = 10
 ACC_GRADIENTS = 1  # Tricky. It can hurt the training.
@@ -49,7 +49,7 @@ WEIGHT_DECAY = 0.0001
 CLIP_GRADIENTS = 1.0
 MULTIGPU = False
 DEVICE1 = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")  # torch.device("cpu") #
-DEVICE2 = DEVICE1  #torch.device("cuda:1" if torch.cuda.is_available() else "cpu")  # torch.device("cpu") #
+DEVICE2 = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")  # torch.device("cpu") #
 NUM_WORKERS = 0  # If is not zero, the debugger freezes!!!
 TOK_MODEL = "bpe"
 TOK_SIZE = 16000
@@ -60,7 +60,7 @@ MAX_LENGTH_TRUNC = 2000
 SAMPLER_NAME = "maxtokens" #"maxtokens"  # bucket # None
 START_FROM_CHECKPOINT_MODEL1 = "transformer_health_best.pt"
 START_FROM_CHECKPOINT_MODEL2 = "transformer_health_best.pt"
-MODEL_INTERPOLATION = [0.25, 0.5, 0.75]
+MODEL_INTERPOLATION = [0.0, 0.25, 0.5, 0.75]
 PRINT_TRANSLATIONS = True
 
 print(f"Device #1: {DEVICE1}")
@@ -80,23 +80,11 @@ torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 
 
-class CustomLoss:
-
-    def __init__(self, alpha, loss1, loss2):
-        self.loss1 = loss1
-        self.loss2 = loss2
-        self.alpha = alpha
-
-    def custom_loss(self, output1, target1, output2, target2):
-        l1 = self.loss1(output1, target1)
-        l2 = self.loss2(output2, target2)
-        return alpha * l1 + (1-alpha) * l2
-
 
 
 def run_experiment(datapath, src, trg, alpha, domain=None):
     start_time = time.time()
-    experiment_name = f"{domain}_a{alpha}_{src}-{trg}_small_1gpu"
+    experiment_name = f"{domain}_a{alpha}_{src}-{trg}_small_2gpu"
     model_name = f"{MODEL_NAME}_{domain}_a{alpha}"
 
     ###########################################################################
@@ -146,9 +134,9 @@ def run_experiment(datapath, src, trg, alpha, domain=None):
         datapath_clean = os.path.join(DATASET_TOK_NAME, TOK_FOLDER)
 
     # Get datasets
-    train_ds = TranslationDataset(os.path.join(datapath, datapath_clean), src_tok, trg_tok, "train")
-    val_ds_olddomain = TranslationDataset(os.path.join(os.path.join(DATASETS_PATH, "health_es-en"), datapath_clean), src_tok, trg_tok, "val")
-    val_ds_newdomain = TranslationDataset(os.path.join(datapath, datapath_clean), src_tok, trg_tok, "val")
+    train_ds = TranslationDataset(os.path.join(datapath, datapath_clean), src_tok, trg_tok, "val")
+    val_ds_olddomain = TranslationDataset(os.path.join(os.path.join(DATASETS_PATH, "health_es-en"), datapath_clean), src_tok, trg_tok, "test")
+    val_ds_newdomain = TranslationDataset(os.path.join(datapath, datapath_clean), src_tok, trg_tok, "test")
 
     # Get dataloaders
     train_loader = base.get_data_loader(SAMPLER_NAME, train_ds, BATCH_SIZE, MAX_TOKENS, NUM_WORKERS, shuffle=True)
@@ -156,22 +144,30 @@ def run_experiment(datapath, src, trg, alpha, domain=None):
     val_loader_newdomain = base.get_data_loader(SAMPLER_NAME, val_ds_newdomain, BATCH_SIZE, MAX_TOKENS, NUM_WORKERS, shuffle=False)
 
     # Instantiate model #1
-    model1 = TransformerDyn(d_model=256,
-                        enc_layers=3, dec_layers=3,
-                        enc_heads=8, dec_heads=8,
-                        enc_dff_dim=512, dec_dff_dim=512,
-                        enc_dropout=0.1, dec_dropout=0.1,
-                        max_src_len=2000, max_trg_len=2000,
-                        src_tok=src_tok, trg_tok=trg_tok,
-                        static_pos_emb=True).to(DEVICE1)
-    print(f'The model #1 has {model1.count_parameters():,} trainable parameters')
-    model1.apply(base.initialize_weights)
+    if alpha == 0.0:
+        model1 = None
+        print(f'The model #1 was removed since there is interpolation (alpha=0.0)')
+    else:
+        model1 = Transformer(d_model=256,
+                            enc_layers=3, dec_layers=3,
+                            enc_heads=8, dec_heads=8,
+                            enc_dff_dim=512, dec_dff_dim=512,
+                            enc_dropout=0.1, dec_dropout=0.1,
+                            max_src_len=2000, max_trg_len=2000,
+                            src_tok=src_tok, trg_tok=trg_tok,
+                            static_pos_emb=True).to(DEVICE1)
+        print(f'The model #1 has {model1.count_parameters():,} trainable parameters')
+        model1.apply(base.initialize_weights)
 
-    # Load weights
-    if START_FROM_CHECKPOINT_MODEL1:
-        from_checkpoint_path = os.path.join(datapath, DATASET_CHECKPOINT_NAME, START_FROM_CHECKPOINT_MODEL1)
-        print(f"(Model 1) Loading weights from: {from_checkpoint_path}")
-        model1.load_state_dict(torch.load(from_checkpoint_path))
+        # [MODEL1] Freeze embedding layers and share parameters
+        for param in model1.parameters():
+            param.requires_grad = False
+
+        # Load weights
+        if START_FROM_CHECKPOINT_MODEL1:
+            from_checkpoint_path = os.path.join(datapath, DATASET_CHECKPOINT_NAME, START_FROM_CHECKPOINT_MODEL1)
+            print(f"(Model 1) Loading weights from: {from_checkpoint_path}")
+            model1.load_state_dict(torch.load(from_checkpoint_path))
 
     model2 = Transformer(d_model=256,
                         enc_layers=3, dec_layers=3,
@@ -184,12 +180,6 @@ def run_experiment(datapath, src, trg, alpha, domain=None):
     print(f'The model #2 has {model2.count_parameters():,} trainable parameters')
     model2.apply(base.initialize_weights)
 
-    # [MODEL1] Freeze embedding layers and share parameters
-    for param in model1.parameters():
-        param.requires_grad = False
-    model1.encoder_shared = model2.encoder
-    model1.decoder_shared = model2.decoder
-
     # Load weights
     if START_FROM_CHECKPOINT_MODEL2:
         from_checkpoint_path = os.path.join(datapath, DATASET_CHECKPOINT_NAME, START_FROM_CHECKPOINT_MODEL2)
@@ -197,9 +187,7 @@ def run_experiment(datapath, src, trg, alpha, domain=None):
         model2.load_state_dict(torch.load(from_checkpoint_path))
 
     optimizer = torch.optim.Adam(model2.parameters(), lr=LEARNING_RATE)
-    cross_entropy_loss1 = nn.CrossEntropyLoss(ignore_index=trg_tok.word2idx[trg_tok.PAD_WORD])
-    cross_entropy_loss2 = nn.CrossEntropyLoss(ignore_index=trg_tok.word2idx[trg_tok.PAD_WORD])
-    criterion = CustomLoss(alpha, cross_entropy_loss1, cross_entropy_loss2)
+    criterion = nn.CrossEntropyLoss(ignore_index=trg_tok.word2idx[trg_tok.PAD_WORD])
 
     # Tensorboard (it needs some epochs to start working ~10-20)
     tb_writer = SummaryWriter(os.path.join(datapath, DATASET_LOGS_NAME, f"{model_name}"))
@@ -223,8 +211,8 @@ def fit(model1, model2, optimizer, train_loader, val_loader_olddomain, val_loade
         print("[WARNING] Training without a checkpoint path. The model won't be saved.")
 
     # Evaluate
-    val_loss_olddomain, translations_olddomain = base.evaluate(model2, val_loader_olddomain, criterion.loss2, device=DEVICE2)
-    val_loss_newdomain, translations_newdomain = base.evaluate(model2, val_loader_newdomain, criterion.loss2, device=DEVICE2)
+    val_loss_olddomain, translations_olddomain = base.evaluate(model2, val_loader_olddomain, criterion, device=DEVICE2)
+    val_loss_newdomain, translations_newdomain = base.evaluate(model2, val_loader_newdomain, criterion, device=DEVICE2)
 
     # Log progress
     start_time = time.time()
@@ -246,8 +234,8 @@ def fit(model1, model2, optimizer, train_loader, val_loader_olddomain, val_loade
         tr_loss = train(model1, model2, optimizer, train_loader, criterion)
 
         # Evaluate
-        val_loss_olddomain, translations_olddomain = base.evaluate(model2, val_loader_olddomain, criterion.loss2, device=DEVICE2)
-        val_loss_newdomain, translations_newdomain = base.evaluate(model2, val_loader_newdomain, criterion.loss2, device=DEVICE2)
+        val_loss_olddomain, translations_olddomain = base.evaluate(model2, val_loader_olddomain, criterion, device=DEVICE2)
+        val_loss_newdomain, translations_newdomain = base.evaluate(model2, val_loader_newdomain, criterion, device=DEVICE2)
 
         # Log progress
         metrics_old = base.log_progress(epoch_i=epoch_i, start_time=start_time, tr_loss=tr_loss, val_loss=val_loss_olddomain, tb_writer=tb_writer,
@@ -276,19 +264,17 @@ def train(model1, model2, optimizer, data_loader, criterion):
     for i, batch in tqdm(enumerate(data_loader), total=len(data_loader)):
         try:
             # Get batch data
-            src1, src_mask1, trg1, trg_mask1 = [x.to(DEVICE1) for x in batch]
-            src2, src_mask2, trg2, trg_mask2 = src1, src_mask1, trg1, trg_mask1  #[x.to(DEVICE2) for x in batch]
-            batch_size, src_max_len, trg_max_len = src1.shape[0], src1.shape[1], trg1.shape[1]
+            src2, src_mask2, trg2, trg_mask2 = [x.to(DEVICE2) for x in batch]
 
-            # Get output (target)
-            with torch.no_grad():
-                output1, _ = model1(src1, src_mask1, trg1[:, :-1], trg_mask1[:, :-1])
-                trg0 = output1.argmax(2).contiguous().view(-1).long()
-
-            # Get output #1 (shared)
-            output1, _ = model1.forward_shared(src1, src_mask1, trg1[:, :-1], trg_mask1[:, :-1])
-            output_dim1 = output1.shape[-1]
-            output1 = output1.contiguous().view(-1, output_dim1)
+            # Get output #1  (model1 is None when there is no interpolation)
+            if model1:
+                # Get batch data
+                src1, src_mask1, trg1, trg_mask1 = [x.to(DEVICE1) for x in batch]
+                batch_size, src_max_len, trg_max_len = src1.shape[0], src1.shape[1], trg1.shape[1]
+                with torch.no_grad():
+                    output1, _ = model1(src1, src_mask1, trg1[:, :-1], trg_mask1[:, :-1])
+                    output_dim1 = output1.shape[-1]
+                    output1 = output1.contiguous().view(-1, output_dim1)
 
             # Get output #2 (shared)
             output2, _ = model2(src2, src_mask2, trg2[:, :-1], trg_mask2[:, :-1])
@@ -297,10 +283,14 @@ def train(model1, model2, optimizer, data_loader, criterion):
             trg2 = trg2[:, 1:].contiguous().view(-1).long()
 
             # Interpolation
-            # output1 = output1.to(DEVICE2)
+            if model1:
+                output1 = output1.to(DEVICE2)
+                output = alpha * output1 + (1-alpha) * output2
+            else:
+                output = output2
 
             # Compute loss
-            loss = criterion.custom_loss(output1, trg0, output2, trg2)
+            loss = criterion(output, trg2)
             loss /= ACC_GRADIENTS  # Normalize loss
             loss.backward()
 
@@ -323,7 +313,7 @@ def train(model1, model2, optimizer, data_loader, criterion):
 
 if __name__ == "__main__":
     # Get all folders in the root path
-    datasets = [os.path.join(DATASETS_PATH, x) for x in ["health_biological_lwf_es-en"]]
+    datasets = [os.path.join(DATASETS_PATH, x) for x in ["health_biological_inter_es-en"]]
     for dataset in datasets:
         for alpha in MODEL_INTERPOLATION:
             domain, (src, trg) = utils.get_dataset_ids(dataset)
