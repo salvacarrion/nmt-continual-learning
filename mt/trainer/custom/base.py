@@ -170,8 +170,9 @@ def get_translations(data, model, device, max_length=50, beam_width=3):
         src, src_mask, trg, trg_mask = [x.to(device) for x in batch]
         batch_size, src_max_len, trg_max_len = src.shape[0], src.shape[1], trg.shape[1]
 
-        pred_trg, probs, _ = model.translate_batch(src, max_length=max_length, beam_width=beam_width)
-        pred_trg = pred_trg[0]
+        smart_max_length = min(max_length, int(trg_max_len*1.2))  # trick: We shouldn't know the max_length
+        pred_trg, probs, _ = model.translate_batch(src, max_length=smart_max_length, beam_width=beam_width)
+        pred_trg = pred_trg[0]  # Get first candidate
 
         # cut off <eos> token
         hyp_dec_all += model.trg_tok.decode(pred_trg, remove_special_tokens=True)

@@ -27,8 +27,8 @@ import sacrebleu
 from datasets import load_metric
 from torchtext.data.metrics import bleu_score
 
-BATCH_SIZE = 128 #int(32*1.5)
-MAX_TOKENS = 4096  #int(4096*1.5)
+BATCH_SIZE = 64 #int(32*1.5)
+MAX_TOKENS = 2048  #int(4096*1.5)
 DEVICE1 = torch.device("cuda" if torch.cuda.is_available() else "cpu")  # torch.device("cpu") #
 NUM_WORKERS = 0  # If is not zero, the debugger freezes!!!
 TOK_MODEL = "bpe"
@@ -38,7 +38,7 @@ LOWERCASE = False
 TRUNCATE = True
 MAX_LENGTH_TRUNC = 2000
 SAMPLER_NAME = "maxtokens"
-MAX_LENGTH = 50
+MAX_LENGTH = 200  # Mimimal impact in performance
 BEAM_WIDTH = 1
 PRINT_TRANSLATIONS = True
 
@@ -125,10 +125,10 @@ def evaluate_hbm(model, criterion, src_tok, trg_tok, train_domain, basepath, dat
             helpers.print_translations(hyp_dec_all, ref_dec_all, src_dec_all, limit=50, randomized=False)
 
         # Compute scores
-        metrics[f"beam{BEAM_WIDTH}"] = base.compute_metrics(hyp_dec_all, ref_dec_all, use_ter=True)
+        metrics[f"beam{BEAM_WIDTH}"] = base.compute_metrics(hyp_dec_all, ref_dec_all, use_ter=False)
         print(f'Translation scores (beam_width={BEAM_WIDTH}; max_length={MAX_LENGTH})')
         print(f'\t- Sacrebleu (bleu): {metrics[f"beam{BEAM_WIDTH}"]["sacrebleu_bleu"]:.2f}')
-        print(f'\t- Sacrebleu (ter): {metrics[f"beam{BEAM_WIDTH}"]["sacrebleu_ter"]:.2f}')
+        # print(f'\t- Sacrebleu (ter): {metrics[f"beam{BEAM_WIDTH}"]["sacrebleu_ter"]:.2f}')
         print(f'\t- Sacrebleu (chrf): {metrics[f"beam{BEAM_WIDTH}"]["sacrebleu_chrf"]:.2f}')
         print(f'\t- Torchtext (bleu): {metrics[f"beam{BEAM_WIDTH}"]["torchtext_bleu"]:.2f}')
 

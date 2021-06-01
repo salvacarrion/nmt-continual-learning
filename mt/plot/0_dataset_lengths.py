@@ -57,24 +57,28 @@ def get_lengths(datapath, src, trg):
 
 def plot_length_dist(lengths, lang_pair):
     pairs = lang_pair.split("-")
+    splits = ["train", "val", "test"]
     for i, src_trg in enumerate(["src", "trg"]):
         data = []
-        for split in ["train", "val", "test"]:
+        for split in splits:
             data.append(lengths[f"{split}_{src_trg}_lengths"])
 
         # Plot histogram
+        data.reverse()  # Legends are reversed
         g = sns.histplot(data=data, kde=True)
 
         # properties
         g.set(xlabel='Sentence length', ylabel="Frequency")
         plt.title(f"{dataset_name} ({pairs[i]}; {lang_pair})")
-        plt.legend(labels=[x.title() for x in ["train", "val", "test"]])
-        plt.show()
+        plt.legend(labels=[x.title() for x in splits])
 
         # Save figure
         plt.savefig(os.path.join(summary_path_images, f"{fname_base}__{lang_pair}_{pairs[i]}.pdf"))
         plt.savefig(os.path.join(summary_path_images, f"{fname_base}__{lang_pair}_{pairs[i]}.jpg"))
         print("Figure saved!")
+
+        # Show plot
+        plt.show()
 
 
 if __name__ == "__main__":
@@ -163,10 +167,11 @@ if __name__ == "__main__":
                 ax.yaxis.set_major_formatter(utils.human_format)
             plt.legend(loc='upper right')
             plt.tight_layout()
-            plt.show()
 
             # Save figure
             plt.savefig(os.path.join(summary_path_images, f"split_sizes__{length_type}_{src_trg}.pdf"))
             plt.savefig(os.path.join(summary_path_images, f"split_sizes__{length_type}_{src_trg}.jpg"))
             print("Figure saved!")
 
+            # Show plot
+            plt.show()
