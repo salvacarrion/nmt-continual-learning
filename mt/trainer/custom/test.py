@@ -23,11 +23,14 @@ from torch.utils.data.sampler import SequentialSampler
 from torchnlp.samplers import BucketBatchSampler
 from mt.dataloaders.max_tokens_batch_sampler import MaxTokensBatchSampler
 
+import sacrebleu
+from datasets import load_metric
+from torchtext.data.metrics import bleu_score
 
-BATCH_SIZE = 64 #int(32*1.5)
-MAX_TOKENS = 2048  #int(4096*1.5)
+BATCH_SIZE = 128 #int(32*1.5)
+MAX_TOKENS = 4096  #int(4096*1.5)
 DEVICE1 = torch.device("cuda" if torch.cuda.is_available() else "cpu")  # torch.device("cpu") #
-NUM_WORKERS = 0
+NUM_WORKERS = 0  # If is not zero, the debugger freezes!!!
 TOK_MODEL = "bpe"
 TOK_SIZE = 16000
 TOK_FOLDER = f"{TOK_MODEL}.{TOK_SIZE}"
@@ -35,8 +38,8 @@ LOWERCASE = False
 TRUNCATE = True
 MAX_LENGTH_TRUNC = 2000
 SAMPLER_NAME = "maxtokens"
-MAX_LENGTH = 250
-BEAM_WIDTH = 5
+MAX_LENGTH = 50
+BEAM_WIDTH = 1
 PRINT_TRANSLATIONS = True
 
 print(f"Device #1: {DEVICE1}")
@@ -108,23 +111,26 @@ def evaluate_hbm(model, criterion, src_tok, trg_tok, train_domain, basepath, dat
 
         # Evaluate
         start_time2 = time.time()
-        val_loss, translations = base.evaluate(model, test_loader, criterion, device=DEVICE1)
+        val_loss, val_translations = base.evaluate(model, test_loader, criterion, device=DEVICE1)
 
         # Log progress
         metrics = base.log_progress(epoch_i=0, start_time=start_time2, tr_loss=None, val_loss=val_loss, tb_writer=None,
-                                    translations=translations, print_translations=PRINT_TRANSLATIONS, prefix=None)
+                                    translations=val_translations, print_translations=False, prefix=None)
 
-        # Get bleu
+        # Get translations (using beam search)
         src_dec_all, hyp_dec_all, ref_dec_all = base.get_translations(test_loader, model, device=DEVICE1,
                                                                       max_length=MAX_LENGTH, beam_width=BEAM_WIDTH)
-
         # Print translations
-        # helpers.print_translations(hyp_dec_all, ref_dec_all, src_dec_all, limit=50)
+        if PRINT_TRANSLATIONS:
+            helpers.print_translations(hyp_dec_all, ref_dec_all, src_dec_all, limit=50, randomized=False)
 
         # Compute scores
-        bleu_score = torchtext.data.metrics.bleu_score([x.split() for x in hyp_dec_all],
-                                                       [[x.split()] for x in ref_dec_all])
-        print(f'BLEU score (beam_width={BEAM_WIDTH}; max_length={MAX_LENGTH})= {bleu_score * 100:.2f}')
+        metrics[f"beam{BEAM_WIDTH}"] = base.compute_metrics(hyp_dec_all, ref_dec_all, use_ter=True)
+        print(f'Translation scores (beam_width={BEAM_WIDTH}; max_length={MAX_LENGTH})')
+        print(f'\t- Sacrebleu (bleu): {metrics[f"beam{BEAM_WIDTH}"]["sacrebleu_bleu"]:.2f}')
+        print(f'\t- Sacrebleu (ter): {metrics[f"beam{BEAM_WIDTH}"]["sacrebleu_ter"]:.2f}')
+        print(f'\t- Sacrebleu (chrf): {metrics[f"beam{BEAM_WIDTH}"]["sacrebleu_chrf"]:.2f}')
+        print(f'\t- Torchtext (bleu): {metrics[f"beam{BEAM_WIDTH}"]["torchtext_bleu"]:.2f}')
 
         # Create path
         eval_name = test_domain
@@ -144,7 +150,8 @@ def evaluate_hbm(model, criterion, src_tok, trg_tok, train_domain, basepath, dat
         with open(os.path.join(eval_path, 'metrics.json'), 'w') as f:
             json.dump(metrics, f)
         print("Metrics saved!")
-        print("\t- To get BLEU use: 'cat hyp.txt | sacrebleu ref.txt'")
+        print("\t- To get BLEU/CHRF/TER use: 'cat hyp.txt | sacrebleu ref.txt --metrics bleu'")
+        print("\t- To get CHRF use: 'chrf -R ref.txt -H hyp.txt'")
 
         print("************************************************************")
         epoch_hours, epoch_mins, epoch_secs = helpers.epoch_time(start_time, end_time=time.time())
@@ -160,6 +167,7 @@ if __name__ == "__main__":
         ("health_es-en", ["transformer_health_best.pt"]),
         ("biological_es-en", ["transformer_biological_best.pt"]),
         ("merged_es-en", ["transformer_merged_best.pt"]),
+        #("health_biological_es-en", ["transformer_health_biological_best.pt"]),
         ("health_biological_lwf_es-en", ["transformer_health_biological_lwf_a0.25_best.pt", "transformer_health_biological_lwf_a0.5_best.pt", "transformer_health_biological_lwf_a0.75_best.pt"])
     ]]
     # datasets = [os.path.join(DATASETS_PATH, "multi30k_de-en")]

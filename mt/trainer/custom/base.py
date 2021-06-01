@@ -95,7 +95,7 @@ def evaluate(model, data_loader, criterion, device):
     return epoch_loss / len(data_loader), (src_dec_all, hyp_dec_all, ref_dec_all)
 
 
-def log_progress(epoch_i, start_time, tr_loss=None, val_loss=None, tb_writer=None, translations=None, print_translations=True, prefix=None):
+def log_progress(epoch_i, start_time, tr_loss=None, val_loss=None, tb_writer=None, translations=None, print_translations=True, prefix=None, **kwargs):
     metrics = {}
     if tr_loss:
         metrics["train"] = {
@@ -114,8 +114,8 @@ def log_progress(epoch_i, start_time, tr_loss=None, val_loss=None, tb_writer=Non
         src_dec_all, hyp_dec_all, ref_dec_all = translations
 
         if val_loss:
-            m_bleu_score = bleu_score([x.split(" ") for x in hyp_dec_all], [[x.split(" ")] for x in ref_dec_all])
-            metrics["val"]["bleu"] = m_bleu_score*100
+            val_metrics = compute_metrics(hyp_dec_all, ref_dec_all, **kwargs)
+            metrics["val"].update(val_metrics)
 
         # Print translations
         if print_translations:
@@ -129,7 +129,8 @@ def log_progress(epoch_i, start_time, tr_loss=None, val_loss=None, tb_writer=Non
     if tr_loss:
         print(f'\t- Train Loss: {metrics["train"]["loss"]:.3f} | Train PPL: {metrics["train"]["ppl"]:.3f}')
     if val_loss:
-        print(f'\t- Val Loss: {metrics["val"]["loss"]:.3f} | Val PPL: {metrics["val"]["ppl"]:.3f} | Val BLEU: {metrics["val"]["bleu"]:.3f}')
+        extra_metrics = [f"Val {k.lower()}: {v:.3f}" for k, v in metrics["val"].items() if k not in {"loss", "ppl"}]
+        print(f'\t- Val Loss: {metrics["val"]["loss"]:.3f} | Val PPL: {metrics["val"]["ppl"]:.3f} | ' + " | ".join(extra_metrics))
     print("------------------------------------------------------------")
 
     # Tensorboard
@@ -140,6 +141,24 @@ def log_progress(epoch_i, start_time, tr_loss=None, val_loss=None, tb_writer=Non
                 tb_writer.add_scalar(f'{prefix}{split}_{k.lower()}', v, epoch_i+1)
                 wandb.log({f'{prefix}{split}_{k.lower()}': v})
 
+    return metrics
+
+
+def compute_metrics(hyp_dec_all, ref_dec_all, use_sacrebleu=True, use_torchtext=True, use_ter=False):
+    metrics = {}
+
+    # Sacrebleu
+    if use_sacrebleu:
+        metrics["sacrebleu_rawcorpusbleu"] = sacrebleu.raw_corpus_bleu(hyp_dec_all, [ref_dec_all]).score
+        metrics["sacrebleu_bleu"] = sacrebleu.corpus_bleu(hyp_dec_all, [ref_dec_all]).score
+        metrics["sacrebleu_chrf"] = sacrebleu.corpus_chrf(hyp_dec_all, [ref_dec_all]).score
+        if use_ter:  # Quite slow
+            metrics["sacrebleu_ter"] = sacrebleu.corpus_ter(hyp_dec_all, [ref_dec_all]).score
+
+    # Torchtext
+    if use_torchtext:
+        m_bleu_score = bleu_score([x.split(" ") for x in hyp_dec_all], [[x.split(" ")] for x in ref_dec_all])
+        metrics["torchtext_bleu"] = m_bleu_score * 100
     return metrics
 
 
