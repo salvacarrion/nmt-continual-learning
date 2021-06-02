@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 # Define constants
 SRC_LANG=$1

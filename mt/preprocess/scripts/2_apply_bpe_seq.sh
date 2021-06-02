@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 # Define constants
 VOCAB_SIZE=$1
