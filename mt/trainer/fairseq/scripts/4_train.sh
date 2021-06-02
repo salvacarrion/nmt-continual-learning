@@ -31,7 +31,7 @@ fairseq-train \
     --seed 1234 \
     --clip-norm 1.0 \
     --lr 0.5e-3 \
-    --patience 10 \
+    --patience 5 \
     --save-dir $BASE_PATH/checkpoints \
     --log-format simple \
     --no-epoch-checkpoints \
