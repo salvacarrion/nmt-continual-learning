@@ -1,83 +1,71 @@
 import os
 import subprocess
 
-if os.environ.get('MACHINE') == "HOME":
-    print("Local")
-    BASE_PATH = "/home/salvacarrion/Documents/Programming/Datasets/Scielo/fairseq"
-    FAST_PATH = "/home/salvacarrion/Documents/packages/fastBPE/fast"
-else:
-    print("Remote")
-    BASE_PATH = "/home/scarrion/datasets/scielo/fairseq"
-    FAST_PATH = "/home/scarrion/packages/fastBPE/fast"
+import random
+import time
+from pathlib import Path
+import json
 
-VOCAB_SIZE = 32000
+from mt import utils
+from mt import DATASETS_PATH, DATASET_EVAL_NAME, DATASET_CLEAN_SORTED_NAME, DATASET_TOK_NAME, DATASET_LOGS_NAME, DATASET_CHECKPOINT_NAME
+
+TOK_MODEL = "bpe"
+TOK_SIZE = 16000
+TOK_FOLDER = f"{TOK_MODEL}.{TOK_SIZE}"
 DOMAINS = ["health", "biological", "merged"]
 
 
-def generate():
-    EVAL_NAME = "evaluate_test_bleu5__hbm"
+def generate(train_dataset, src, trg, model_name, train_domain):
+    # Get all folders in the root path
+    test_datasets = [os.path.join(DATASETS_PATH, x) for x in [f"health_{src}-{trg}",
+                                                              f"biological_{src}-{trg}",
+                                                              f"merged_{src}-{trg}"]]
+    for test_dataset in test_datasets:
+        test_domain, (test_src, test_trg) = utils.get_dataset_ids(test_dataset)
+        print("#############################################")
+        print(f"=> TESTING MODEL FROM '{train_domain}' IN DOMAIN '{test_domain}'")
 
-    for SRC_LANG, TRG_LANG in [("es", "en"), ("pt", "en")]:
-        for domain in DOMAINS:
-            dataset1 = f"scielo_{domain}_{SRC_LANG}_{TRG_LANG}"
-            print(f"Evaluating model from: {dataset1}...")
+        # Create path
+        eval_path = os.path.join(train_dataset, DATASET_EVAL_NAME, model_name, test_domain)
+        Path(eval_path).mkdir(parents=True, exist_ok=True)
 
-            # Paths
-            MODEL_BASEPATH = os.path.abspath(os.path.join(BASE_PATH, dataset1))
+        # # Preprocess domain datasets with train tokenizers
+        # source_dataset = test_dataset
+        # vocab_path = train_dataset
+        # output_path = eval_path
+        # print(f"\t- Preprocessing datasets for: {test_domain}...")
+        # subprocess.call(['sh', './scripts/3_preprocess.sh', source_dataset, vocab_path, output_path, TOK_FOLDER, src, trg])
 
-            for domain2 in DOMAINS:
-                print(f"\t- Preprocessing test set from: {domain2}...")
-                dataset2 = f"scielo_{domain2}_{SRC_LANG}_{TRG_LANG}"
-                TEST_DATAPATH = os.path.abspath(os.path.join(BASE_PATH, dataset2))
-                OUTPUT_PATH = os.path.abspath(os.path.join(BASE_PATH, EVAL_NAME, dataset1, domain2))
+        # Generate them
+        eval_path_bin = os.path.join(eval_path, "data-bin")
+        model_path = os.path.join(train_dataset, "checkpoints", model_name)
+        output_path = eval_path  #os.path.join(eval_path, "generated")
+        print(f"\t- Generating translations for: {test_domain}...")
+        subprocess.call(['sh', './scripts/5_generate.sh', eval_path_bin, model_path, output_path, src, trg])
 
-                subprocess.call(['sh', './scripts/3_preprocess-test.sh', str(VOCAB_SIZE), SRC_LANG, TRG_LANG, MODEL_BASEPATH, TEST_DATAPATH, OUTPUT_PATH, FAST_PATH])
-
-                # Generate them
-                print(f"\t- Generating translations for: {domain2}...")
-                subprocess.call(['sh', './scripts/5_generate.sh', SRC_LANG, TRG_LANG, OUTPUT_PATH, MODEL_BASEPATH])
-
-            print("")
-            print("########################################################################")
-            print("########################################################################")
-            print("")
         print("")
-        print("------------------------------------------------------------------------")
-        print("------------------------------------------------------------------------")
+        print("########################################################################")
+        print("########################################################################")
         print("")
-
-
-def generate_eval():
-    EVAL_NAME = "evaluate_test_bleu5__seq"
-
-    for SRC_LANG, TRG_LANG in [("es", "en"), ("pt", "en")]:
-        dataset1 = f"scielo_health_biological_{SRC_LANG}_{TRG_LANG}"
-        print(f"Evaluating model from: {dataset1}...")
-
-        # Paths
-        MODEL_BASEPATH = os.path.abspath(os.path.join(BASE_PATH, dataset1))
-
-        for domain2 in DOMAINS:
-            print(f"\t- Preprocessing test set from: {domain2}...")
-            dataset2 = f"scielo_{domain2}_{SRC_LANG}_{TRG_LANG}"
-            TEST_DATAPATH = os.path.abspath(os.path.join(BASE_PATH, dataset2))
-            OUTPUT_PATH = os.path.abspath(os.path.join(BASE_PATH, EVAL_NAME, dataset1, domain2))
-
-            subprocess.call(['sh', './scripts/3_preprocess-generate.sh', str(VOCAB_SIZE), SRC_LANG, TRG_LANG, MODEL_BASEPATH, TEST_DATAPATH, OUTPUT_PATH, FAST_PATH])
-
-            # Generate them
-            print(f"\t- Generating translations for: {domain2}...")
-            subprocess.call(['sh', './scripts/5_generate.sh', SRC_LANG, TRG_LANG, OUTPUT_PATH, MODEL_BASEPATH])
-
-            print("")
-            print("########################################################################")
-            print("########################################################################")
-            print("")
-        print("")
-        print("------------------------------------------------------------------------")
-        print("------------------------------------------------------------------------")
-        print("")
+    print("")
+    print("------------------------------------------------------------------------")
+    print("------------------------------------------------------------------------")
+    print("")
 
 
 if __name__ == "__main__":
-    generate_eval()
+    # Get all folders in the root path
+    # datasets = [os.path.join(DATASETS_PATH, x) for x in ["health_es-en", "biological_es-en", "merged_es-en"]]
+    datasets = [(os.path.join(DATASETS_PATH, x), l) for x, l in [
+        ("health_fairseq_es-en", ["checkpoint_best.pt"]),
+      ]]
+
+    for dataset, models in datasets:
+        domain, (src, trg) = utils.get_dataset_ids(dataset)
+        fname_base = f"{domain}_{src}-{trg}"
+
+
+        # Train model
+        for model_name in models:
+            print(f"Testing model ({fname_base}; {model_name})...")
+            generate(dataset, src, trg, model_name=model_name, train_domain=domain)

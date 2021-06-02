@@ -1,36 +1,32 @@
 #!/bin/bash
 
 # Define constants
-SRC_LANG=$1
-TRG_LANG=$2
-BASE_PATH=$3
-MODEL_PATH=$4
-EVAL_PATH="${BASE_PATH}/eval"
+EVAL_PATH=$1
+MODEL_PATH=$2
+OUTPUT_PATH=$3
+SRC_LANG=$4
+TRG_LANG=$5
 
 # Show constants
 echo "Evaluating model... ****************"
+echo "- Evaluate path: "$EVAL_PATH
+echo "- Model path: "$MODEL_PATH
+echo "- Output path: "$OUTPUT_PATH
 echo "- Source language: "$SRC_LANG
 echo "- Target language: "$TRG_LANG
-echo "- Model path: "$MODEL_PATH
-echo "- Evaluate path: "$EVAL_PATH
-echo "- Base path: "$BASE_PATH
-
-
-# Create folder
-mkdir -p $EVAL_PATH
 
 # Evaluate model
 fairseq-generate \
-    $BASE_PATH/data-bin \
+    $EVAL_PATH \
     --source-lang $SRC_LANG --target-lang $TRG_LANG \
-    --path $MODEL_PATH/checkpoints/checkpoint_best.pt \
+    --path $MODEL_PATH \
+    --results-path $OUTPUT_PATH \
     --eval-bleu \
     --eval-bleu-args '{"beam": 5, "max_len_a": 1.2, "max_len_b": 10}' \
     --eval-bleu-detok moses \
     --eval-bleu-remove-bpe \
     --eval-bleu-print-samples \
-    --results-path $EVAL_PATH \
-     --num-workers $(nproc) \
+    --num-workers $(nproc) \
 
 
 #fairseq-generate data-bin/scielo_health_es_en/ --source-lang es --target-lang en --path checkpoints/transformer/checkpoint_best.pt --tokenizer moses --remove-bpe --beam 5 --scoring bleu
