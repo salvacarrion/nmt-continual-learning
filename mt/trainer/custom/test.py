@@ -164,11 +164,11 @@ if __name__ == "__main__":
     # Get all folders in the root path
     # datasets = [os.path.join(DATASETS_PATH, x) for x in ["health_es-en", "biological_es-en", "merged_es-en"]]
     datasets = [(os.path.join(DATASETS_PATH, x), l) for x, l in [
-        ("health_es-en", ["transformer_health_best.pt"]),
-        ("biological_es-en", ["transformer_biological_best.pt"]),
-        ("merged_es-en", ["transformer_merged_best.pt"]),
-        #("health_biological_es-en", ["transformer_health_biological_best.pt"]),
-        ("health_biological_lwf_es-en", ["transformer_health_biological_lwf_a0.25_best.pt", "transformer_health_biological_lwf_a0.5_best.pt", "transformer_health_biological_lwf_a0.75_best.pt"])
+        # ("health_es-en", ["transformer_health_best.pt"]),
+        # ("biological_es-en", ["transformer_biological_best.pt"]),
+        # ("merged_es-en", ["transformer_merged_best.pt"]),
+        # ("health_biological_inter_es-en", ["transformer_health_biological_inter_a0.0_best.pt", "transformer_health_biological_inter_a0.25_best.pt", "transformer_health_biological_inter_a0.5_best.pt", "transformer_health_biological_inter_a0.75_best.pt"]),
+        # ("health_biological_lwf_es-en", ["transformer_health_biological_lwf_a0.25_best.pt", "transformer_health_biological_lwf_a0.5_best.pt", "transformer_health_biological_lwf_a0.75_best.pt"])
     ]]
     # datasets = [os.path.join(DATASETS_PATH, "multi30k_de-en")]
     # datasets = [os.path.join(DATASETS_PATH, "health_es-en")]
