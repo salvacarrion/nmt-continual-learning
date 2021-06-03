@@ -57,7 +57,9 @@ if __name__ == "__main__":
     # Get all folders in the root path
     # datasets = [os.path.join(DATASETS_PATH, x) for x in ["health_es-en", "biological_es-en", "merged_es-en"]]
     datasets = [(os.path.join(DATASETS_PATH, x), l) for x, l in [
-        ("health_fairseq_es-en", ["checkpoint_best.pt"]),
+        # ("health_fairseq_es-en", ["checkpoint_best.pt"]),
+        ("biological_fairseq_es-en", ["checkpoint_best.pt"]),
+        ("merged_fairseq_es-en", ["checkpoint_best.pt"]),
       ]]
 
     for dataset, models in datasets:

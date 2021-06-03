@@ -7,8 +7,8 @@ from mt import utils
 
 
 # Get all folders in the root path
-datasets = [os.path.join(DATASETS_PATH, name) for name in os.listdir(DATASETS_PATH) if os.path.isdir(os.path.join(DATASETS_PATH, name))]
-# datasets = [os.path.join(DATASETS_PATH, "multi30k_de-en")]
+# datasets = [os.path.join(DATASETS_PATH, name) for name in os.listdir(DATASETS_PATH) if os.path.isdir(os.path.join(DATASETS_PATH, name))]
+datasets = [os.path.join(DATASETS_PATH, "multi30k_de-en")]
 for dataset in datasets:
     domain, (src, trg) = utils.get_dataset_ids(dataset)
     fname_base = f"{domain}_{src}-{trg}"
@@ -20,4 +20,4 @@ for dataset in datasets:
 
     # Learn and apply BPE
     subprocess.call(['sh', './scripts/2_learn_bpe.sh', str(VOCAB_SIZE), src, trg, dataset, savepath, FASTBPE_PATH])
-    subprocess.call(['sh', './scripts/2_apply_bpe.sh', str(VOCAB_SIZE), src, trg, dataset, savepath, FASTBPE_PATH])
+    subprocess.call(['sh', './scripts/2_apply_bpe.sh', str(VOCAB_SIZE), src, trg, dataset, savepath, FASTBPE_PATH, "true"])
