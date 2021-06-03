@@ -20,7 +20,8 @@ def preprocess(train_dataset, src, trg):
 
 if __name__ == "__main__":
     # Get all folders in the root path
-    datasets = [os.path.join(DATASETS_PATH, x) for x in ["health_fairseq_es-en", "biological_fairseq_es-en", "merged_fairseq_es-en"]]
+    # datasets = [os.path.join(DATASETS_PATH, x) for x in ["health_fairseq_es-en", "biological_fairseq_es-en", "merged_fairseq_es-en"]]
+    datasets = [os.path.join(DATASETS_PATH, x) for x in ["health_biological_fairseq_es-en"]]
     for dataset in datasets:
         domain, (src, trg) = utils.get_dataset_ids(dataset)
         fname_base = f"{domain}_{src}-{trg}"
