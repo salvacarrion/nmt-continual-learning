@@ -38,7 +38,7 @@ def get_metrics(datapath, src, trg, model_name, label, train_domain):
     return metrics
 
 
-def plot_metrics(df_metrics, savepath, lang_pair, metric=("sacrebleu_bleu", "bleu")):
+def plot_metrics(df_metrics, savepath, lang_pair, metric=("sacrebleu_bleu", "bleu"), show_values=True):
     metric_id, metric_name = metric
 
     # Get specific language metrics
@@ -48,11 +48,18 @@ def plot_metrics(df_metrics, savepath, lang_pair, metric=("sacrebleu_bleu", "ble
     g = sns.catplot(data=df_lang, x="label", y=metric_id, kind="bar", hue="test_domain", legend=False)
     g.fig.set_size_inches(12, 8)
 
+    # Add values
+    if show_values:
+        ax = g.facet_axis(0, 0)
+        for c in ax.containers:
+            labels = [f"{float(v.get_height()):.1f}" for v in c]
+            ax.bar_label(c, labels=labels, label_type='edge', fontsize=8)
+
     # properties
     g.set(xlabel='Models', ylabel=metric_name.upper())
     plt.title(f"{metric_name.upper()} scores in different domains | {lang_pair}")
 
-    g.set_xticklabels(rotation=45, horizontalalignment="center")
+    g.set_xticklabels(rotation=90, horizontalalignment="center")
     plt.legend(loc='upper right')
     plt.tight_layout()
 
@@ -72,10 +79,16 @@ if __name__ == "__main__":
     lang_pair = "es-en"
     metric = ("sacrebleu_bleu", "bleu")  # (ID, pretty name)
     datasets = [(os.path.join(DATASETS_PATH, x), l) for x, l in [
-        ("health_fairseq_es-en", [("checkpoint_best.pt", "Health (Fairseq)")]),
-        ("biological_fairseq_es-en", [("checkpoint_best.pt", "Biological (Fairseq)")]),
-        ("merged_fairseq_es-en", [("checkpoint_best.pt", "H+B (Fairseq)")]),
-        ("health_biological_fairseq_es-en", [("checkpoint_best.pt", "H→B (Fairseq)")]),
+        ("health_fairseq_es-en", [("checkpoint_best.pt", "Health (Fairseq; small)")]),
+        ("biological_fairseq_es-en", [("checkpoint_best.pt", "Biological (Fairseq; small)")]),
+        ("merged_fairseq_es-en", [("checkpoint_best.pt", "H+B (Fairseq; small)")]),
+        ("health_biological_fairseq_es-en", [("checkpoint_best.pt", "H→B (Fairseq; small)")]),
+
+        ("health_fairseq_large_es-en", [("checkpoint_best.pt", "Health (Fairseq; large)")]),
+        ("biological_fairseq_large_es-en", [("checkpoint_best.pt", "Biological (Fairseq; large)")]),
+        ("merged_fairseq_large_es-en", [("checkpoint_best.pt", "H+B (Fairseq; large)")]),
+        ("health_biological_fairseq_large_es-en", [("checkpoint_best.pt", "H→B (Fairseq; large)")]),
+
         ("health_es-en", [("transformer_health_best.pt", "Health (Custom)")]),
         ("biological_es-en", [("transformer_biological_best.pt", "Biological (Custom)")]),
         ("merged_es-en", [("transformer_merged_best.pt", "H+B (Custom)")]),
