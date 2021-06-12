@@ -14,7 +14,8 @@ TOK_MODEL = "bpe"
 TOK_SIZE = 16000
 TOK_FOLDER = f"{TOK_MODEL}.{TOK_SIZE}"
 DOMAINS = ["health", "biological", "merged"]
-GET_SCORES = True
+GET_SCORES = True  # Generate or Get-scores/metrics
+
 
 def generate(train_dataset, src, trg, model_name, train_domain):
     # Get all folders in the root path
@@ -88,10 +89,22 @@ if __name__ == "__main__":
     # Get all folders in the root path
     # datasets = [os.path.join(DATASETS_PATH, x) for x in ["health_es-en", "biological_es-en", "merged_es-en"]]
     datasets = [(os.path.join(DATASETS_PATH, x), l) for x, l in [
-        ("health_fairseq_es-en", ["checkpoint_best.pt"]),
-        ("biological_fairseq_es-en", ["checkpoint_best.pt"]),
-        ("merged_fairseq_es-en", ["checkpoint_best.pt"]),
-        ("health_biological_fairseq_es-en", ["checkpoint_best.pt"]),
+        # ("health_fairseq_es-en", ["checkpoint_best.pt"]),
+        # ("biological_fairseq_es-en", ["checkpoint_best.pt"]),
+        # ("merged_fairseq_es-en", ["checkpoint_best.pt"]),
+        # ("health_biological_fairseq_es-en", ["checkpoint_best.pt"]),
+        #
+        # ("health_fairseq_large_es-en", ["checkpoint_best.pt"]),
+        # ("biological_fairseq_large_es-en", ["checkpoint_best.pt"]),
+        # ("merged_fairseq_large_es-en", ["checkpoint_best.pt"]),
+        # ("health_biological_fairseq_large_es-en", ["checkpoint_best.pt"]),
+
+        ("biological_fairseq_vhealth_es-en", ["checkpoint_best.pt"]),
+        ("biological_fairseq_vmerged_es-en", ["checkpoint_best.pt"]),
+        ("health_fairseq_vbiological_es-en", ["checkpoint_best.pt"]),
+        ("health_fairseq_vmerged_es-en", ["checkpoint_best.pt"]),
+        ("merged_fairseq_vbiological_es-en", ["checkpoint_best.pt"]),
+        ("merged_fairseq_vhealth_es-en", ["checkpoint_best.pt"]),
       ]]
 
     for dataset, models in datasets:

@@ -9,7 +9,7 @@ SAVE_VOCABS = False
 
 # Get all folders in the root path
 # datasets = [os.path.join(DATASETS_PATH, name) for name in os.listdir(DATASETS_PATH) if os.path.isdir(os.path.join(DATASETS_PATH, name))]
-datasets = [os.path.join(DATASETS_PATH, x) for x in ["health_fairseq_vmerged_es-en", "biological_fairseq_vmerged_es-en"]]
+datasets = [os.path.join(DATASETS_PATH, x) for x in ["merged_fairseq_vbiological_es-en", "health_fairseq_vbiological_es-en"]]
 # datasets = [os.path.join(DATASETS_PATH, "multi30k_de-en")]
 for dataset in datasets:
     domain, (src, trg) = utils.get_dataset_ids(dataset)
