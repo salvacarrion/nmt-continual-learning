@@ -21,7 +21,8 @@ if __name__ == "__main__":
     # datasets = [os.path.join(DATASETS_PATH, x) for x in ["health_fairseq_large_es-en", "biological_fairseq_large_es-en", "merged_fairseq_large_es-en"]]
     # datasets = [os.path.join(DATASETS_PATH, x) for x in ["health_biological_fairseq_large_es-en"]]
     # datasets = [os.path.join(DATASETS_PATH, x) for x in ["health_biological_fairseq_es-en"]]
-    datasets = [os.path.join(DATASETS_PATH, x) for x in ["merged_fairseq_vbiological_es-en", "health_fairseq_vbiological_es-en"]]
+    # datasets = [os.path.join(DATASETS_PATH, x) for x in ["health_fairseq_vbiological_es-en", "merged_fairseq_vbiological_es-en"]]
+    datasets = [os.path.join(DATASETS_PATH, x) for x in ["health_biological_fairseq_vbiological_es-en", "health_biological_fairseq_vmerged_es-en"]]
     for dataset in datasets:
         domain, (src, trg) = utils.get_dataset_ids(dataset)
         fname_base = f"{domain}_{src}-{trg}"

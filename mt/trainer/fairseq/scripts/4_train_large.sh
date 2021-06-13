@@ -45,13 +45,12 @@ fairseq-train \
     --task translation \
     --wandb-project $WANDB_PROJECT \
     --num-workers	$(nproc) \
-    --warmup-updates 4000
-    \
     --restore-file $BASE_PATH/checkpoints/health_checkpoint_best.pt \
     --reset-dataloader \
     --reset-lr-scheduler \
     --reset-meters \
     --reset-optimizer \
+#    --warmup-updates 4000\
 #    --update-freq 8 \
 #    --lr-scheduler reduce_lr_on_plateau  \
 
