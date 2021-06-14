@@ -54,6 +54,13 @@ def plot_metrics(df_metrics, savepath, lang_pair, metric=("sacrebleu_bleu", "ble
             labels = [f"{float(v.get_height()):.1f}" for v in c]
             ax.bar_label(c, labels=labels, label_type='edge', fontsize=8)
 
+    # properties
+    g.set(xlabel='Models', ylabel=metric_name.upper())
+    plt.title(f"{metric_name.upper()} scores in different domains | {lang_pair}")
+
+    g.set_xticklabels(rotation=0, horizontalalignment="center")
+    plt.legend(loc='lower right')
+    plt.tight_layout()
 
     # Save figure
     plt.savefig(os.path.join(savepath, f"{metric_id}_scores_{lang_pair}{file_title}.pdf"))
@@ -70,9 +77,14 @@ if __name__ == "__main__":
 
     # Get all folders in the root path
     lang_pair = "es-en"
-    file_title = "__" + "model_size_health_biological"
+    file_title = "__" + "hbm_basic"
     metric = ("sacrebleu_bleu", "bleu")  # (ID, pretty name)
     datasets = [(os.path.join(DATASETS_PATH, x), l) for x, l in [
+
+        # Basic ***********
+        ("health_fairseq_es-en", [("checkpoint_best.pt", "Health (Fairseq; small)")]),
+        ("biological_fairseq_es-en", [("checkpoint_best.pt", "Biological (Fairseq; small)")]),
+        ("merged_fairseq_es-en", [("checkpoint_best.pt", "H+B (Fairseq; small)")]),
 
         # Model size ***********
         # ("health_fairseq_es-en", [("checkpoint_best.pt", "Health (Fairseq; small)")]),
@@ -84,8 +96,8 @@ if __name__ == "__main__":
         # ("merged_fairseq_es-en", [("checkpoint_best.pt", "H+B (Fairseq; small)")]),
         # ("merged_fairseq_large_es-en", [("checkpoint_best.pt", "H+B (Fairseq; large)")]),
 
-        ("health_biological_fairseq_es-en", [("checkpoint_best.pt", "H→B (Fairseq; small)")]),
-        ("health_biological_fairseq_large_es-en", [("checkpoint_best.pt", "H→B (Fairseq; large)")]),
+        # ("health_biological_fairseq_es-en", [("checkpoint_best.pt", "H→B (Fairseq; small)")]),
+        # ("health_biological_fairseq_large_es-en", [("checkpoint_best.pt", "H→B (Fairseq; large)")]),
 
 
         # Vocabulary domain ***********
@@ -101,8 +113,14 @@ if __name__ == "__main__":
         # ("merged_fairseq_vbiological_es-en", [("checkpoint_best.pt", "Merged (Voc. domain=Biological)")]),
         # ("merged_fairseq_es-en", [("checkpoint_best.pt", "Merged (Voc. domain=Merged)")]),
 
-
-
+        # ("health_fairseq_es-en", [("checkpoint_best.pt", "Health (Voc. domain=H)")]),
+        # ("health_biological_fairseq_es-en", [("checkpoint_best.pt", "H→B (Voc. domain=H)")]),
+        # # #
+        # ("health_fairseq_vbiological_es-en", [("checkpoint_best.pt", "Health\n(Voc. domain=B)")]),
+        # ("health_biological_fairseq_vbiological_es-en", [("checkpoint_best.pt", "H→B\n(Voc. domain=B)")]),
+        #
+        # ("health_fairseq_vmerged_es-en", [("checkpoint_best.pt", "Health\n(Voc. domain=M)")]),
+        # ("health_biological_fairseq_vmerged_es-en", [("checkpoint_best.pt", "H→B\n(Voc. domain=M)")]),
 
         # Custom ***********
         # ("health_es-en", [("transformer_health_best.pt", "Health (Custom)")]),
