@@ -19,9 +19,6 @@ echo "- Base path: "$BASE_PATH
 echo "- Save path: "$SAVE_PATH
 echo "- Save vocabs: "$SAVE_VOCABS
 
-# Create folder
-mkdir -p $SAVE_PATH
-
 # Apply BPE ****
 # Source
 $FASTBPE_PATH applybpe $SAVE_PATH/train.$SRC_LANG $BASE_PATH/clean/train.$SRC_LANG $SAVE_PATH/codes.$SRC_LANG

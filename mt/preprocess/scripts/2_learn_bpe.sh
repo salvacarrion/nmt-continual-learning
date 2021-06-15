@@ -17,9 +17,6 @@ echo "- Target language: "$TRG_LANG
 echo "- Base path: "$BASE_PATH
 echo "- Save path: "$SAVE_PATH
 
-# Create folder
-mkdir -p $SAVE_PATH
-
 # Learn codes
 $FASTBPE_PATH learnbpe $VOCAB_SIZE $BASE_PATH/clean/train.$SRC_LANG > $SAVE_PATH/codes.$SRC_LANG
 $FASTBPE_PATH learnbpe $VOCAB_SIZE $BASE_PATH/clean/train.$TRG_LANG > $SAVE_PATH/codes.$TRG_LANG

@@ -1,8 +1,5 @@
 import os
 
-# Constants
-VOCAB_SIZE = 16000
-
 # Main folders
 if os.getenv('LOCAL_GPU'):
     ROOT_PATH = "/home/salva/Documents/Programming/Datasets/scielo/"
@@ -23,8 +20,9 @@ DATASET_RAW_NAME = "raw"
 DATASET_SPLITS_NAME = "splits"
 DATASET_CLEAN_NAME = "clean"
 DATASET_CLEAN_SORTED_NAME = "clean_sorted"
-DATASET_BPE_NAME = f"bpe.{VOCAB_SIZE}"
 DATASET_TOK_NAME = "tok"
+DATASET_BPE_NAME = "bpe"
+DATASET_WT_NAME = "wt"
 DATASET_EVAL_NAME = "eval"
 DATASET_LOGS_NAME = "logs"
 DATASET_CHECKPOINT_NAME = "checkpoints"
