@@ -9,6 +9,10 @@ from mt import DATASETS_PATH, DATASET_CLEAN_NAME, DATASET_CLEAN_SORTED_NAME, DAT
 WANDB_PROJECT = "nmt"  # Run "wandb login" in the terminal
 USE_LARGE_MODEL = False
 
+TOK_MODEL = "bpe"  # wt
+TOK_SIZE = 8000
+TOK_FOLDER = f"{TOK_MODEL}.{TOK_SIZE}"
+
 
 def train(datapath):
     script = "4_train_large.sh" if USE_LARGE_MODEL else "4_train_small.sh"
@@ -17,28 +21,22 @@ def train(datapath):
 
 if __name__ == "__main__":
     # Get all folders in the root path
-    # datasets = [os.path.join(DATASETS_PATH, x) for x in ["health_fairseq_es-en", "biological_fairseq_es-en", "merged_fairseq_es-en"]]
-    # datasets = [os.path.join(DATASETS_PATH, x) for x in ["health_fairseq_large_es-en", "biological_fairseq_large_es-en", "merged_fairseq_large_es-en"]]
-    # datasets = [os.path.join(DATASETS_PATH, x) for x in ["health_biological_fairseq_large_es-en"]]
-    # datasets = [os.path.join(DATASETS_PATH, x) for x in ["health_biological_fairseq_es-en"]]
-    # datasets = [os.path.join(DATASETS_PATH, x) for x in ["health_fairseq_vbiological_es-en", "merged_fairseq_vbiological_es-en"]]
-    # datasets = [os.path.join(DATASETS_PATH, x) for x in ["health_biological_fairseq_vbiological_es-en", "health_biological_fairseq_vmerged_es-en"]]
-    datasets = [os.path.join(DATASETS_PATH, x) for x in [
-        # "health_fairseq_vhealth_es-en",
-        # "health_fairseq_vbiological_es-en",
-        # "health_fairseq_vmerged_es-en",
-        #
-        # "biological_fairseq_vhealth_es-en",
-        # "biological_fairseq_vbiological_es-en",
-        # "biological_fairseq_vmerged_es-en",
-        #
-        # "merged_fairseq_vhealth_es-en",
-        # "merged_fairseq_vbiological_es-en",
-        # "merged_fairseq_vmerged_es-en",
+    datasets = [os.path.join(DATASETS_PATH, TOK_FOLDER, x) for x in [
+        "health_fairseq_vhealth_es-en",
+        "health_fairseq_vbiological_es-en",
+        "health_fairseq_vmerged_es-en",
 
-        "health_biological_fairseq_vhealth_es-en",
-        "health_biological_fairseq_vbiological_es-en",
-        "health_biological_fairseq_vmerged_es-en",
+        "biological_fairseq_vhealth_es-en",
+        "biological_fairseq_vbiological_es-en",
+        "biological_fairseq_vmerged_es-en",
+
+        "merged_fairseq_vhealth_es-en",
+        "merged_fairseq_vbiological_es-en",
+        "merged_fairseq_vmerged_es-en",
+
+        # "health_biological_fairseq_vhealth_es-en",
+        # "health_biological_fairseq_vbiological_es-en",
+        # "health_biological_fairseq_vmerged_es-en",
     ]]
     for dataset in datasets:
         domain, (src, trg) = utils.get_dataset_ids(dataset)
