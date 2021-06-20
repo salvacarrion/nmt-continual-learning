@@ -17,8 +17,10 @@ sns.set()
 TOK_MODEL = "bpe"
 TOK_SIZE = 16000
 TOK_FOLDER = f"{TOK_MODEL}.{TOK_SIZE}"
-
 DOMAINS = ["health", "biological", "merged"]
+VOCAB_STR = str(TOK_SIZE)[:-3] + "k"
+LANG_PAIR = "es-en"
+METRIC = "iov"
 
 
 def get_vocabs(lang_pair):
@@ -29,7 +31,7 @@ def get_vocabs(lang_pair):
         vocabs[domain] = {}
 
         for lang in lang_pair.split("-"):
-            with open(os.path.join(DATASETS_PATH, f"{domain}_{lang_pair}", DATASET_TOK_NAME, TOK_FOLDER, f"vocab.{lang}"), 'r') as f:
+            with open(os.path.join(DATASETS_PATH, TOK_FOLDER, f"{domain}_fairseq_v{domain}_{lang_pair}", DATASET_TOK_NAME, TOK_FOLDER, f"vocab.{lang}"), 'r') as f:
                 vocabs[domain][lang] = {w.split(' ')[0].strip() for w in f.read().strip().split('\n')}
 
     return vocabs
@@ -79,13 +81,13 @@ def plot_heat_map(df, lang_pair, metric, savepath):
         g.set_yticklabels([x.title() for x in DOMAINS], va='center', minor=False)
 
         # properties
-        plt.title(f"Overlapping ratios ({metric.upper()}) | {lang} ({lang_pair})")
+        plt.title(f"Overlapping ratios ({metric.upper()}) | {VOCAB_STR} | {lang} ({lang_pair})")
         plt.tight_layout()
 
         # Save figure
-        plt.savefig(os.path.join(savepath, f"overlapping_{metric}_{lang}.pdf"))
-        plt.savefig(os.path.join(savepath, f"overlapping_{metric}_{lang}.svg"))
-        plt.savefig(os.path.join(savepath, f"overlapping_{metric}_{lang}.png"))
+        plt.savefig(os.path.join(savepath, f"overlapping_{VOCAB_STR}_{metric}_{lang}.pdf"))
+        plt.savefig(os.path.join(savepath, f"overlapping_{VOCAB_STR}_{metric}_{lang}.svg"))
+        plt.savefig(os.path.join(savepath, f"overlapping_{VOCAB_STR}_{metric}_{lang}.png"))
         print("Figures saved!")
 
         # Show plot
@@ -93,26 +95,23 @@ def plot_heat_map(df, lang_pair, metric, savepath):
 
 
 if __name__ == "__main__":
-
-    lang_pair = "es-en"
-    metric = "iou"
     file_title = "__" + "vocab_overlap"
 
     # Create folder
-    summary_path = os.path.join(DATASETS_PATH, DATASET_SUMMARY_NAME, "vocab_overlap")
+    summary_path = os.path.join(DATASETS_PATH, TOK_FOLDER, DATASET_SUMMARY_NAME, "vocab_overlap")
     Path(summary_path).mkdir(parents=True, exist_ok=True)
 
     # Get vocabs
-    vocabs = get_vocabs(lang_pair)
+    vocabs = get_vocabs(LANG_PAIR)
 
     # Compute overlap and print
-    df = compute_overlap(vocabs, lang_pair)
+    df = compute_overlap(vocabs, LANG_PAIR)
     print(df)
 
     # Save file
-    df.to_csv(os.path.join(summary_path, f"overlapping_{lang_pair}.csv"), index=False)
+    df.to_csv(os.path.join(summary_path, f"overlapping_{VOCAB_STR}_{LANG_PAIR}.csv"), index=False)
     print("File saved!")
 
     # Plot heatmap
-    plot_heat_map(df, lang_pair, metric, summary_path)
+    plot_heat_map(df, LANG_PAIR, METRIC, summary_path)
     print("Done!")

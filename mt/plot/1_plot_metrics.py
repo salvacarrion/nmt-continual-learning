@@ -15,17 +15,24 @@ import seaborn as sns
 sns.set()
 
 
+TOK_MODEL = "bpe"
+TOK_SIZE = 32000
+TOK_FOLDER = f"{TOK_MODEL}.{TOK_SIZE}"
+VOCAB_STR = str(TOK_SIZE)[:-3] + "k"
+BEAM_FOLDER = "beam5"
+METRIC = "bleu"
+
+
 def get_metrics(datapath, src, trg, model_name, label, train_domain):
     metrics = []
     # Get all folders in the root path
     for test_domain in ["health", "biological", "merged"]:
         # Load metrics to file
         eval_path = os.path.join(datapath, DATASET_EVAL_NAME, model_name, test_domain)
-        with open(os.path.join(eval_path, 'metrics.json'), 'r') as f:
+        with open(os.path.join(eval_path, f'beam_metrics.json'), 'r') as f:
             # Load metrics json
             json_metrics = json.load(f)
-            key = [k for k in list(json_metrics.keys()) if "beam" in k][0]  # "val"
-            row = json_metrics[key]
+            row = json_metrics["beams"][BEAM_FOLDER]
 
             # Add more data
             row["model_name"] = model_name
@@ -33,6 +40,7 @@ def get_metrics(datapath, src, trg, model_name, label, train_domain):
             row["train_domain"] = train_domain.title()
             row["test_domain"] = test_domain.title()
             row["lang"] = f"{src}-{trg}"
+            row["vocab_size"] = VOCAB_STR
             metrics.append(row)
     return metrics
 
@@ -56,16 +64,16 @@ def plot_metrics(df_metrics, savepath, lang_pair, metric=("sacrebleu_bleu", "ble
 
     # properties
     g.set(xlabel='Models', ylabel=metric_name.upper())
-    plt.title(f"{metric_name.upper()} scores in different domains | {lang_pair}")
+    plt.title(f"{metric_name.upper()} scores in different domains | {VOCAB_STR} | {lang_pair}")
 
     g.set_xticklabels(rotation=0, horizontalalignment="center")
     plt.legend(loc='lower right')
     plt.tight_layout()
 
     # Save figure
-    plt.savefig(os.path.join(savepath, f"{metric_id}_scores_{lang_pair}{file_title}.pdf"))
-    plt.savefig(os.path.join(savepath, f"{metric_id}_scores_{lang_pair}{file_title}.svg"))
-    plt.savefig(os.path.join(savepath, f"{metric_id}_scores_{lang_pair}{file_title}.png"))
+    plt.savefig(os.path.join(savepath, f"{metric_id}_{VOCAB_STR}_scores_{lang_pair}{file_title}.pdf"))
+    plt.savefig(os.path.join(savepath, f"{metric_id}_{VOCAB_STR}_scores_{lang_pair}{file_title}.svg"))
+    plt.savefig(os.path.join(savepath, f"{metric_id}_{VOCAB_STR}_scores_{lang_pair}{file_title}.png"))
     print("Figures saved!")
 
     # Show plot
@@ -77,50 +85,50 @@ if __name__ == "__main__":
 
     # Get all folders in the root path
     lang_pair = "es-en"
-    file_title = "__" + "hbm_basic"
-    metric = ("sacrebleu_bleu", "bleu")  # (ID, pretty name)
-    datasets = [(os.path.join(DATASETS_PATH, x), l) for x, l in [
+    file_title = "__" + "health_biological_domainM"  #"model_size_health_biological" #"hbm_basic"  #"__"
+    metric = ("fairseq_bleu", "bleu")  # (ID, pretty name)
+    datasets = [(os.path.join(DATASETS_PATH, TOK_FOLDER, x), l) for x, l in [
 
         # Basic ***********
-        ("health_fairseq_es-en", [("checkpoint_best.pt", "Health (Fairseq; small)")]),
-        ("biological_fairseq_es-en", [("checkpoint_best.pt", "Biological (Fairseq; small)")]),
-        ("merged_fairseq_es-en", [("checkpoint_best.pt", "H+B (Fairseq; small)")]),
+        # ("health_fairseq_vhealth_es-en", [("checkpoint_best.pt", "Health\n(small; VD=H)")]),
+        # ("biological_fairseq_vbiological_es-en", [("checkpoint_best.pt", "Biological\n(small; VD=B)")]),
+        # ("merged_fairseq_vmerged_es-en", [("checkpoint_best.pt", "H+B\n(small; VD=M)")]),
 
-        # Model size ***********
-        # ("health_fairseq_es-en", [("checkpoint_best.pt", "Health (Fairseq; small)")]),
-        # ("health_fairseq_large_es-en", [("checkpoint_best.pt", "Health (Fairseq; large)")]),
+        # Model size (1k only) ***********
+        # ("health_fairseq_vhealth_es-en", [("checkpoint_best.pt", "Health\n(small; VD=H)")]),
+        # ("health_fairseq_large_vhealth_es-en", [("checkpoint_best.pt", "Health\n(large; VD=H)")]),
         #
-        # ("biological_fairseq_es-en", [("checkpoint_best.pt", "Biological (Fairseq; small)")]),
-        # ("biological_fairseq_large_es-en", [("checkpoint_best.pt", "Biological (Fairseq; large)")]),
+        # ("biological_fairseq_vbiological_es-en", [("checkpoint_best.pt", "Biological\n(small; VD=B)")]),
+        # ("biological_fairseq_large_vbiological_es-en", [("checkpoint_best.pt", "Biological\n(large; VD=B)")]),
         # #
-        # ("merged_fairseq_es-en", [("checkpoint_best.pt", "H+B (Fairseq; small)")]),
-        # ("merged_fairseq_large_es-en", [("checkpoint_best.pt", "H+B (Fairseq; large)")]),
-
-        # ("health_biological_fairseq_es-en", [("checkpoint_best.pt", "H→B (Fairseq; small)")]),
-        # ("health_biological_fairseq_large_es-en", [("checkpoint_best.pt", "H→B (Fairseq; large)")]),
+        # ("merged_fairseq_vmerged_es-en", [("checkpoint_best.pt", "H+B\n(small; VD=M)")]),
+        # ("merged_fairseq_large_vmerged_es-en", [("checkpoint_best.pt", "H+B\n(large; VD=M)")]),
+        #
+        # ("health_biological_fairseq_vhealth_es-en", [("checkpoint_best.pt", "H→B\n(small; VD=H)")]),
+        # ("health_biological_fairseq_large_vhealth_es-en", [("checkpoint_best.pt", "H→B\n(large; VD=H)")]),
 
 
         # Vocabulary domain ***********
-        # ("health_fairseq_es-en", [("checkpoint_best.pt", "Health (Voc. domain=Health)")]),
-        # ("health_fairseq_vbiological_es-en", [("checkpoint_best.pt", "Health (Voc. domain=Biological)")]),
-        # ("health_fairseq_vmerged_es-en", [("checkpoint_best.pt", "Health (Voc. domain=Merged)")]),
-
-        # ("biological_fairseq_vhealth_es-en", [("checkpoint_best.pt", "Biological (Voc. domain=Health)")]),
-        # ("biological_fairseq_es-en", [("checkpoint_best.pt", "Biological (Voc. domain=Biological)")]),
-        # ("biological_fairseq_vmerged_es-en", [("checkpoint_best.pt", "Biological (Voc. domain=Merged)")]),
-
-        # ("merged_fairseq_vhealth_es-en", [("checkpoint_best.pt", "Merged (Voc. domain=Health)")]),
-        # ("merged_fairseq_vbiological_es-en", [("checkpoint_best.pt", "Merged (Voc. domain=Biological)")]),
-        # ("merged_fairseq_es-en", [("checkpoint_best.pt", "Merged (Voc. domain=Merged)")]),
-
-        # ("health_fairseq_es-en", [("checkpoint_best.pt", "Health (Voc. domain=H)")]),
-        # ("health_biological_fairseq_es-en", [("checkpoint_best.pt", "H→B (Voc. domain=H)")]),
-        # # #
-        # ("health_fairseq_vbiological_es-en", [("checkpoint_best.pt", "Health\n(Voc. domain=B)")]),
-        # ("health_biological_fairseq_vbiological_es-en", [("checkpoint_best.pt", "H→B\n(Voc. domain=B)")]),
+        # ("health_fairseq_vhealth_es-en", [("checkpoint_best.pt", "Health\n(small; VD=H)")]),
+        # ("health_fairseq_vbiological_es-en", [("checkpoint_best.pt", "Health\n(small; VD=B)")]),
+        # ("health_fairseq_vmerged_es-en", [("checkpoint_best.pt", "Health\n(small; VD=M)")]),
+        # #
+        # ("biological_fairseq_vhealth_es-en", [("checkpoint_best.pt", "Biological\n(small; VD=H)")]),
+        # ("biological_fairseq_vbiological_es-en", [("checkpoint_best.pt", "Biological\n(small; VD=B)")]),
+        # ("biological_fairseq_vmerged_es-en", [("checkpoint_best.pt", "Biological\n(small; VD=M)")]),
         #
-        # ("health_fairseq_vmerged_es-en", [("checkpoint_best.pt", "Health\n(Voc. domain=M)")]),
-        # ("health_biological_fairseq_vmerged_es-en", [("checkpoint_best.pt", "H→B\n(Voc. domain=M)")]),
+        # ("merged_fairseq_vhealth_es-en", [("checkpoint_best.pt", "Merged\n(small; VD=H)")]),
+        # ("merged_fairseq_vbiological_es-en", [("checkpoint_best.pt", "Merged\n(small; VD=B)")]),
+        # ("merged_fairseq_vmerged_es-en", [("checkpoint_best.pt", "Merged\n(small; VD=M)")]),
+
+        # ("health_fairseq_vhealth_es-en", [("checkpoint_best.pt", "Health\n(small; VD=H)")]),
+        # ("health_biological_fairseq_vhealth_es-en", [("checkpoint_best.pt", "H→B\n(small; VD=H)")]),
+
+        # ("health_fairseq_vbiological_es-en", [("checkpoint_best.pt", "Health\n(small; VD=B)")]),
+        # ("health_biological_fairseq_vbiological_es-en", [("checkpoint_best.pt", "H→B\n(small; VD=B)")]),
+
+        # ("health_fairseq_vmerged_es-en", [("checkpoint_best.pt", "Health\n(small; VD=M)")]),
+        # ("health_biological_fairseq_vmerged_es-en", [("checkpoint_best.pt", "H→B\n(small; VD=M)")]),
 
         # Custom ***********
         # ("health_es-en", [("transformer_health_best.pt", "Health (Custom)")]),
@@ -153,13 +161,13 @@ if __name__ == "__main__":
             metrics += get_metrics(dataset, src, trg, model_name=model_name, label=label, train_domain=domain)
 
     # Create folder
-    summary_path = os.path.join(DATASETS_PATH, DATASET_SUMMARY_NAME, "metrics")
+    summary_path = os.path.join(DATASETS_PATH, TOK_FOLDER, DATASET_SUMMARY_NAME, "metrics")
     Path(summary_path).mkdir(parents=True, exist_ok=True)
 
     # Save data
     df = pd.DataFrame(metrics)
     print(df)
-    df.to_csv(os.path.join(summary_path, f"test_data{file_title}.csv"))
+    df.to_csv(os.path.join(summary_path, f"test_data_{VOCAB_STR}_{file_title}.csv"))
     print("Data saved!")
 
     # Plot metrics

@@ -50,9 +50,9 @@ echo "=> Start time (sacrebleu, chrf): $(date)"
 cat $OUTPUT_PATH/hyp.txt | sacrebleu $OUTPUT_PATH/ref.txt --metrics chrf >> $OUTPUT_PATH/metrics_chrf.txt
 echo "=> End time (sacrebleu, chrf): $(date)"
 
-echo "=> Start time (sacrebleu, ter): $(date)"
-cat $OUTPUT_PATH/hyp.txt | sacrebleu $OUTPUT_PATH/ref.txt --metrics ter >> $OUTPUT_PATH/metrics_ter.txt
-echo "=> End time (sacrebleu, ter): $(date)"
+#echo "=> Start time (sacrebleu, ter): $(date)"
+#cat $OUTPUT_PATH/hyp.txt | sacrebleu $OUTPUT_PATH/ref.txt --metrics ter >> $OUTPUT_PATH/metrics_ter.txt
+#echo "=> End time (sacrebleu, ter): $(date)"
 
 #fairseq-generate data-bin/scielo_health_es_en/ --source-lang es --target-lang en --path checkpoints/transformer/checkpoint_best.pt --tokenizer moses --remove-bpe --beam 5 --scoring bleu
 #fairseq-interactive data-bin/scielo_health_es_en/ --path checkpoints/transformer/checkpoint_best.pt --beam 5 --source-lang es --target-lang en --tokenizer moses --bpe fastbpe --bpe-codes codes
