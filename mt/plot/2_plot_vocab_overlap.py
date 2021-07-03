@@ -15,12 +15,12 @@ import seaborn as sns
 sns.set()
 
 TOK_MODEL = "bpe"
-TOK_SIZE = 16000
+TOK_SIZE = 8000
 TOK_FOLDER = f"{TOK_MODEL}.{TOK_SIZE}"
 DOMAINS = ["health", "biological", "merged"]
 VOCAB_STR = str(TOK_SIZE)[:-3] + "k"
 LANG_PAIR = "es-en"
-METRIC = "iov"
+METRIC = "iou"
 
 
 def get_vocabs(lang_pair):

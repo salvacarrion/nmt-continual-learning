@@ -11,7 +11,7 @@ from mt import utils
 from mt import DATASETS_PATH, DATASET_EVAL_NAME, DATASET_CLEAN_SORTED_NAME, DATASET_TOK_NAME, DATASET_LOGS_NAME, DATASET_CHECKPOINT_NAME
 
 TOK_MODEL = "bpe"
-TOK_SIZE = 32000
+TOK_SIZE = 2000
 TOK_FOLDER = f"{TOK_MODEL}.{TOK_SIZE}"
 DOMAINS = ["health", "biological", "merged"]
 BEAMS = [5]
@@ -191,18 +191,18 @@ if __name__ == "__main__":
         ("health_fairseq_vhealth_es-en", ["checkpoint_best.pt"]),
         ("health_fairseq_vbiological_es-en", ["checkpoint_best.pt"]),
         ("health_fairseq_vmerged_es-en", ["checkpoint_best.pt"]),
-
-        # Fairseq (small): Biological
+        #
+        # # Fairseq (small): Biological
         ("biological_fairseq_vhealth_es-en", ["checkpoint_best.pt"]),
         ("biological_fairseq_vbiological_es-en", ["checkpoint_best.pt"]),
         ("biological_fairseq_vmerged_es-en", ["checkpoint_best.pt"]),
-
-        # Fairseq (small): Merged
+        #
+        # # Fairseq (small): Merged
         ("merged_fairseq_vhealth_es-en", ["checkpoint_best.pt"]),
         ("merged_fairseq_vbiological_es-en", ["checkpoint_best.pt"]),
         ("merged_fairseq_vmerged_es-en", ["checkpoint_best.pt"]),
-
-        # Fairseq (small): H->B
+        #
+        # # Fairseq (small): H->B
         ("health_biological_fairseq_vhealth_es-en", ["checkpoint_best.pt"]),
         ("health_biological_fairseq_vbiological_es-en", ["checkpoint_best.pt"]),
         ("health_biological_fairseq_vmerged_es-en", ["checkpoint_best.pt"]),
@@ -222,6 +222,6 @@ if __name__ == "__main__":
         for model_name in models:
             print(f"Testing model ({fname_base}; {model_name})...")
 
-            # generate(dataset, src, trg, model_name=model_name, train_domain=domain)
+            generate(dataset, src, trg, model_name=model_name, train_domain=domain)
             # get_scores(dataset, src, trg, model_name=model_name, train_domain=domain)  # Old
             get_beam_scores(dataset, src, trg)

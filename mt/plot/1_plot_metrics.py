@@ -15,12 +15,6 @@ import seaborn as sns
 sns.set()
 
 
-TOK_MODEL = "bpe"
-TOK_SIZE = 32000
-TOK_FOLDER = f"{TOK_MODEL}.{TOK_SIZE}"
-VOCAB_STR = str(TOK_SIZE)[:-3] + "k"
-BEAM_FOLDER = "beam5"
-METRIC = "bleu"
 
 
 def get_metrics(datapath, src, trg, model_name, label, train_domain):
@@ -65,6 +59,7 @@ def plot_metrics(df_metrics, savepath, lang_pair, metric=("sacrebleu_bleu", "ble
     # properties
     g.set(xlabel='Models', ylabel=metric_name.upper())
     plt.title(f"{metric_name.upper()} scores in different domains | {VOCAB_STR} | {lang_pair}")
+    plt.ylim([0, 55])
 
     g.set_xticklabels(rotation=0, horizontalalignment="center")
     plt.legend(loc='lower right')
@@ -81,95 +76,118 @@ def plot_metrics(df_metrics, savepath, lang_pair, metric=("sacrebleu_bleu", "ble
 
 
 if __name__ == "__main__":
-    metrics = []
+    for TOK_SIZE in [16000]:
+        TOK_MODEL = "bpe"
+        TOK_FOLDER = f"{TOK_MODEL}.{TOK_SIZE}"
+        VOCAB_STR = str(TOK_SIZE)[:-3] + "k"
+        BEAM_FOLDER = "beam5"
+        METRIC = "bleu"
 
-    # Get all folders in the root path
-    lang_pair = "es-en"
-    file_title = "__" + "health_biological_domainM"  #"model_size_health_biological" #"hbm_basic"  #"__"
-    metric = ("fairseq_bleu", "bleu")  # (ID, pretty name)
-    datasets = [(os.path.join(DATASETS_PATH, TOK_FOLDER, x), l) for x, l in [
+        metrics = []
 
-        # Basic ***********
-        # ("health_fairseq_vhealth_es-en", [("checkpoint_best.pt", "Health\n(small; VD=H)")]),
-        # ("biological_fairseq_vbiological_es-en", [("checkpoint_best.pt", "Biological\n(small; VD=B)")]),
-        # ("merged_fairseq_vmerged_es-en", [("checkpoint_best.pt", "H+B\n(small; VD=M)")]),
+        # Get all folders in the root path
+        lang_pair = "es-en"
+        file_title = "__" + "model_size_domainH_seq"  #"model_size_health_biological" #"hbm_basic"  #"__"
+        metric = ("sacrebleu_bleu", "bleu")  # (ID, pretty name)
+        datasets = [(os.path.join(DATASETS_PATH, TOK_FOLDER, x), l) for x, l in [
 
-        # Model size (1k only) ***********
-        # ("health_fairseq_vhealth_es-en", [("checkpoint_best.pt", "Health\n(small; VD=H)")]),
-        # ("health_fairseq_large_vhealth_es-en", [("checkpoint_best.pt", "Health\n(large; VD=H)")]),
-        #
-        # ("biological_fairseq_vbiological_es-en", [("checkpoint_best.pt", "Biological\n(small; VD=B)")]),
-        # ("biological_fairseq_large_vbiological_es-en", [("checkpoint_best.pt", "Biological\n(large; VD=B)")]),
-        # #
-        # ("merged_fairseq_vmerged_es-en", [("checkpoint_best.pt", "H+B\n(small; VD=M)")]),
-        # ("merged_fairseq_large_vmerged_es-en", [("checkpoint_best.pt", "H+B\n(large; VD=M)")]),
-        #
-        # ("health_biological_fairseq_vhealth_es-en", [("checkpoint_best.pt", "H→B\n(small; VD=H)")]),
-        # ("health_biological_fairseq_large_vhealth_es-en", [("checkpoint_best.pt", "H→B\n(large; VD=H)")]),
+            # Basic ***********
+            # ("health_fairseq_vhealth_es-en", [("checkpoint_best.pt", "Health\n(small; VD=H)")]),
+            # ("biological_fairseq_vbiological_es-en", [("checkpoint_best.pt", "Biological\n(small; VD=B)")]),
+            # ("merged_fairseq_vmerged_es-en", [("checkpoint_best.pt", "H+B\n(small; VD=M)")]),
+
+            # Model size (16k only) ***********
+            ("health_fairseq_vhealth_es-en", [("checkpoint_best.pt", "Health\n(small; VD=H)")]),
+            ("health_fairseq_large_vhealth_es-en", [("checkpoint_best.pt", "Health\n(large; VD=H)")]),
+
+            ("biological_fairseq_vbiological_es-en", [("checkpoint_best.pt", "Biological\n(small; VD=B)")]),
+            ("biological_fairseq_large_vbiological_es-en", [("checkpoint_best.pt", "Biological\n(large; VD=B)")]),
+            #
+            ("merged_fairseq_vmerged_es-en", [("checkpoint_best.pt", "H+B\n(small; VD=M)")]),
+            ("merged_fairseq_large_vmerged_es-en", [("checkpoint_best.pt", "H+B\n(large; VD=M)")]),
+
+            ("health_biological_fairseq_vhealth_es-en", [("checkpoint_best.pt", "H→B\n(small; VD=H)")]),
+            ("health_biological_fairseq_large_vhealth_es-en", [("checkpoint_best.pt", "H→B\n(large; VD=H)")]),
 
 
-        # Vocabulary domain ***********
-        # ("health_fairseq_vhealth_es-en", [("checkpoint_best.pt", "Health\n(small; VD=H)")]),
-        # ("health_fairseq_vbiological_es-en", [("checkpoint_best.pt", "Health\n(small; VD=B)")]),
-        # ("health_fairseq_vmerged_es-en", [("checkpoint_best.pt", "Health\n(small; VD=M)")]),
-        # #
-        # ("biological_fairseq_vhealth_es-en", [("checkpoint_best.pt", "Biological\n(small; VD=H)")]),
-        # ("biological_fairseq_vbiological_es-en", [("checkpoint_best.pt", "Biological\n(small; VD=B)")]),
-        # ("biological_fairseq_vmerged_es-en", [("checkpoint_best.pt", "Biological\n(small; VD=M)")]),
-        #
-        # ("merged_fairseq_vhealth_es-en", [("checkpoint_best.pt", "Merged\n(small; VD=H)")]),
-        # ("merged_fairseq_vbiological_es-en", [("checkpoint_best.pt", "Merged\n(small; VD=B)")]),
-        # ("merged_fairseq_vmerged_es-en", [("checkpoint_best.pt", "Merged\n(small; VD=M)")]),
+            # Vocabulary domain ***********
+            # ("health_fairseq_vhealth_es-en", [("checkpoint_best.pt", "Health\n(small; VD=H)")]),
+            # ("health_fairseq_vbiological_es-en", [("checkpoint_best.pt", "Health\n(small; VD=B)")]),
+            # ("health_fairseq_vmerged_es-en", [("checkpoint_best.pt", "Health\n(small; VD=M)")]),
+            #
+            # ("biological_fairseq_vhealth_es-en", [("checkpoint_best.pt", "Biological\n(small; VD=H)")]),
+            # ("biological_fairseq_vbiological_es-en", [("checkpoint_best.pt", "Biological\n(small; VD=B)")]),
+            # ("biological_fairseq_vmerged_es-en", [("checkpoint_best.pt", "Biological\n(small; VD=M)")]),
+            #
+            # ("merged_fairseq_vhealth_es-en", [("checkpoint_best.pt", "Merged\n(small; VD=H)")]),
+            # ("merged_fairseq_vbiological_es-en", [("checkpoint_best.pt", "Merged\n(small; VD=B)")]),
+            # ("merged_fairseq_vmerged_es-en", [("checkpoint_best.pt", "Merged\n(small; VD=M)")]),
 
-        # ("health_fairseq_vhealth_es-en", [("checkpoint_best.pt", "Health\n(small; VD=H)")]),
-        # ("health_biological_fairseq_vhealth_es-en", [("checkpoint_best.pt", "H→B\n(small; VD=H)")]),
+            # ("health_fairseq_vhealth_es-en", [("checkpoint_best.pt", "Health\n(small; VD=H)")]),
+            # ("health_biological_fairseq_vhealth_es-en", [("checkpoint_best.pt", "H→B\n(small; VD=H)")]),
 
-        # ("health_fairseq_vbiological_es-en", [("checkpoint_best.pt", "Health\n(small; VD=B)")]),
-        # ("health_biological_fairseq_vbiological_es-en", [("checkpoint_best.pt", "H→B\n(small; VD=B)")]),
+            # ("health_fairseq_vbiological_es-en", [("checkpoint_best.pt", "Health\n(small; VD=B)")]),
+            # ("health_biological_fairseq_vbiological_es-en", [("checkpoint_best.pt", "H→B\n(small; VD=B)")]),
 
-        # ("health_fairseq_vmerged_es-en", [("checkpoint_best.pt", "Health\n(small; VD=M)")]),
-        # ("health_biological_fairseq_vmerged_es-en", [("checkpoint_best.pt", "H→B\n(small; VD=M)")]),
+            # ("health_fairseq_vmerged_es-en", [("checkpoint_best.pt", "Health\n(small; VD=M)")]),
+            # ("health_biological_fairseq_vmerged_es-en", [("checkpoint_best.pt", "H→B\n(small; VD=M)")]),
 
-        # Custom ***********
-        # ("health_es-en", [("transformer_health_best.pt", "Health (Custom)")]),
-        # ("biological_es-en", [("transformer_biological_best.pt", "Biological (Custom)")]),
-        # ("merged_es-en", [("transformer_merged_best.pt", "H+B (Custom)")]),
+            # Compare ***********
+            # ("health_fairseq_vhealth_es-en", [("checkpoint_best.pt", "Health\n(small; VD=H)")]),
+            # ("biological_fairseq_vhealth_es-en", [("checkpoint_best.pt", "Biological\n(small; VD=H)")]),
+            # ("merged_fairseq_vhealth_es-en", [("checkpoint_best.pt", "Merged\n(small; VD=H)")]),
+            # ("health_biological_fairseq_vhealth_es-en", [("checkpoint_best.pt", "H→B\n(small; VD=H)")]),
+            #
+            # ("health_fairseq_vbiological_es-en", [("checkpoint_best.pt", "Health\n(small; VD=B)")]),
+            # ("biological_fairseq_vbiological_es-en", [("checkpoint_best.pt", "Biological\n(small; VD=B)")]),
+            # ("merged_fairseq_vbiological_es-en", [("checkpoint_best.pt", "Merged\n(small; VD=B)")]),
+            # ("health_biological_fairseq_vbiological_es-en", [("checkpoint_best.pt", "H→B\n(small; VD=B)")]),
+            #
+            # ("health_fairseq_vmerged_es-en", [("checkpoint_best.pt", "Health\n(small; VD=M)")]),
+            # ("biological_fairseq_vmerged_es-en", [("checkpoint_best.pt", "Biological\n(small; VD=M)")]),
+            # ("merged_fairseq_vmerged_es-en", [("checkpoint_best.pt", "Merged\n(small; VD=M)")]),
+            # ("health_biological_fairseq_vmerged_es-en", [("checkpoint_best.pt", "H→B\n(small; VD=M)")]),
 
-        # Interpolation ***********
-        # ("health_biological_inter_es-en", [
-        #     ("transformer_health_biological_inter_a0.0_best.pt", "H→B (Inter; a=0.0)"),
-        #     ("transformer_health_biological_inter_a0.25_best.pt", "H→B (Inter; a=0.25)"),
-        #     ("transformer_health_biological_inter_a0.5_best.pt", "H→B (Inter; a=0.50)"),
-        #     ("transformer_health_biological_inter_a0.75_best.pt", "H→B (Inter; a=0.75)"),
-        #     ]
-        #  ),
+            # Custom ***********
+            # ("health_es-en", [("transformer_health_best.pt", "Health (Custom)")]),
+            # ("biological_es-en", [("transformer_biological_best.pt", "Biological (Custom)")]),
+            # ("merged_es-en", [("transformer_merged_best.pt", "H+B (Custom)")]),
 
-        # LearningWithoutForgetting ***********
-        # ("health_biological_lwf_es-en", [
-        #     ("transformer_health_biological_lwf_a0.25_best.pt", "H→B (LwF; a=0.25)"),
-        #     ("transformer_health_biological_lwf_a0.5_best.pt", "H→B (LwF; a=0.50)"),
-        #     ("transformer_health_biological_lwf_a0.75_best.pt", "H→B (LwF; a=0.75)"),
-        # ]),
-    ]]
-    for dataset, models in datasets:
-        domain, (src, trg) = utils.get_dataset_ids(dataset)
-        fname_base = f"{domain}_{src}-{trg}"
+            # Interpolation ***********
+            # ("health_biological_inter_es-en", [
+            #     ("transformer_health_biological_inter_a0.0_best.pt", "H→B (Inter; a=0.0)"),
+            #     ("transformer_health_biological_inter_a0.25_best.pt", "H→B (Inter; a=0.25)"),
+            #     ("transformer_health_biological_inter_a0.5_best.pt", "H→B (Inter; a=0.50)"),
+            #     ("transformer_health_biological_inter_a0.75_best.pt", "H→B (Inter; a=0.75)"),
+            #     ]
+            #  ),
 
-        # Train model
-        for model_name, label in models:
-            print(f"Getting model ({fname_base}; {model_name})...")
-            metrics += get_metrics(dataset, src, trg, model_name=model_name, label=label, train_domain=domain)
+            # LearningWithoutForgetting ***********
+            # ("health_biological_lwf_es-en", [
+            #     ("transformer_health_biological_lwf_a0.25_best.pt", "H→B (LwF; a=0.25)"),
+            #     ("transformer_health_biological_lwf_a0.5_best.pt", "H→B (LwF; a=0.50)"),
+            #     ("transformer_health_biological_lwf_a0.75_best.pt", "H→B (LwF; a=0.75)"),
+            # ]),
+        ]]
+        for dataset, models in datasets:
+            domain, (src, trg) = utils.get_dataset_ids(dataset)
+            fname_base = f"{domain}_{src}-{trg}"
 
-    # Create folder
-    summary_path = os.path.join(DATASETS_PATH, TOK_FOLDER, DATASET_SUMMARY_NAME, "metrics")
-    Path(summary_path).mkdir(parents=True, exist_ok=True)
+            # Train model
+            for model_name, label in models:
+                print(f"Getting model ({fname_base}; {model_name})...")
+                metrics += get_metrics(dataset, src, trg, model_name=model_name, label=label, train_domain=domain)
 
-    # Save data
-    df = pd.DataFrame(metrics)
-    print(df)
-    df.to_csv(os.path.join(summary_path, f"test_data_{VOCAB_STR}_{file_title}.csv"))
-    print("Data saved!")
+        # Create folder
+        summary_path = os.path.join(DATASETS_PATH, TOK_FOLDER, DATASET_SUMMARY_NAME, "metrics")
+        Path(summary_path).mkdir(parents=True, exist_ok=True)
 
-    # Plot metrics
-    plot_metrics(df, savepath=summary_path, lang_pair=lang_pair, metric=metric, file_title=file_title)
-    print("Done!")
+        # Save data
+        df = pd.DataFrame(metrics)
+        print(df)
+        df.to_csv(os.path.join(summary_path, f"test_data_{VOCAB_STR}_{file_title}.csv"))
+        print("Data saved!")
+
+        # Plot metrics
+        plot_metrics(df, savepath=summary_path, lang_pair=lang_pair, metric=metric, file_title=file_title)
+        print("Done!")
