@@ -37,48 +37,54 @@ def get_metrics(datapath, src, trg, model_name, label, train_domain):
     return metrics
 
 
-def plot_metrics(df_metrics, savepath, lang_pair, metric=("sacrebleu_bleu", "bleu"), show_values=True, file_title="", tok_size=None):
+def plot_metrics(df, savepath, lang_pair, metric=("sacrebleu_bleu", "bleu"), show_values=True, file_title=""):
     metric_id, metric_name = metric
 
     # Get specific language metrics
-    df_lang = df_metrics[df_metrics.lang == lang_pair]
+    df = df[df.lang == lang_pair]
+    # df = df[df.test_domain == "Health"]
+    # df = df[df.train_domain == train_domain]
 
-    # Draw a nested barplot by species and sex
-    g = sns.catplot(data=df_lang, x="label", y=metric_id, kind="bar", hue="test_domain", legend=False)
-    g.fig.set_size_inches(12, 8)
-
-    # Add values
-    if show_values:
-        ax = g.facet_axis(0, 0)
-        for c in ax.containers:
-            labels = [f"{float(v.get_height()):.1f}" for v in c]
-            ax.bar_label(c, labels=labels, label_type='edge', fontsize=8)
+    # Re-organize data
+    rows = []
+    for i, df_row in df.iterrows():
+        domain = f'{df_row["train_domain"]}__{df_row["test_domain"]}'.lower()
+        domain = domain.replace("fairseq_", "")
+        domain = domain.replace("health", "h").replace("biological", "b").replace("merged", "m")
+        # if "_vh" in domain: #domain[-1] != domain[-4]:
+        # if domain[-1] == domain[-4]:
+        # domain = domain.replace("__health", "__h").replace("__biological", "__b").replace("__merged", "__m")
+        row = {"train_domain": df_row["train_domain"], "test_domain": df_row["test_domain"],
+               "domain": domain,
+               "vocab_size": df_row["vocab_size"], metric_id: df_row[metric_id]}
+        rows.append(row)
+    df_new = pd.DataFrame(rows)
+    g = sns.lineplot(data=df_new, x="vocab_size", y=metric_id, hue="domain")
 
     # properties
-    g.set(xlabel='Models', ylabel=metric_name.upper())
-    plt.title(f"{metric_name.upper()} scores in different domains | {VOCAB_STR} | {lang_pair}")
-    plt.ylim([0, 100])
-
-    g.set_xticklabels(rotation=0, horizontalalignment="center")
-    plt.legend(loc='lower right')
+    g.set(xlabel="Number of codes for BPE", ylabel=metric_name.upper())
+    plt.title(f"{metric_name.upper()} depending on the number of BPE codes | ({lang_pair})")
+    plt.legend(loc='lower left', prop={'size': 8})
     plt.tight_layout()
 
     # Save figure
-    plt.savefig(os.path.join(savepath, f"{metric_id}_{tok_size}_scores_{lang_pair}{file_title}.pdf"))
-    plt.savefig(os.path.join(savepath, f"{metric_id}_{tok_size}_scores_{lang_pair}{file_title}.svg"))
-    plt.savefig(os.path.join(savepath, f"{metric_id}_{tok_size}_scores_{lang_pair}{file_title}.png"))
-    print("Figures saved!")
-
-    # Save figure (together)
-    plt.savefig(os.path.join(DATASETS_PATH, "temp", f"{metric_id}_{tok_size}_scores_{lang_pair}{file_title}.pdf"))
-    plt.savefig(os.path.join(DATASETS_PATH, "temp", f"{metric_id}_{tok_size}_scores_{lang_pair}{file_title}.svg"))
-    plt.savefig(os.path.join(DATASETS_PATH, "temp", f"{metric_id}_{tok_size}_scores_{lang_pair}{file_title}.png"))
+    # plt.savefig(os.path.join(savepath, f"{metric_id}_{VOCAB_STR}_scores_{lang_pair}{file_title}.pdf"))
+    # plt.savefig(os.path.join(savepath, f"{metric_id}_{VOCAB_STR}_scores_{lang_pair}{file_title}.svg"))
+    # plt.savefig(os.path.join(savepath, f"{metric_id}_{VOCAB_STR}_scores_{lang_pair}{file_title}.png"))
+    # print("Figures saved!")
+    #
+    # # Save figure (together)
+    # plt.savefig(os.path.join(DATASETS_PATH, "temp", f"{metric_id}_{VOCAB_STR}_scores_{lang_pair}{file_title}.pdf"))
+    # plt.savefig(os.path.join(DATASETS_PATH, "temp", f"{metric_id}_{VOCAB_STR}_scores_{lang_pair}{file_title}.svg"))
+    # plt.savefig(os.path.join(DATASETS_PATH, "temp", f"{metric_id}_{VOCAB_STR}_scores_{lang_pair}{file_title}.png"))
 
     # Show plot
     plt.show()
+    asd = 3
 
 
 if __name__ == "__main__":
+    metrics = []
     for TOK_SIZE in [32000, 16000, 8000, 4000, 2000, 500, 128, 64]:
         TOK_MODEL = "bpe"
         TOK_FOLDER = f"{TOK_MODEL}.{TOK_SIZE}"
@@ -86,13 +92,11 @@ if __name__ == "__main__":
         BEAM_FOLDER = "beam5"
         METRIC = "bleu"
 
-        metrics = []
-
         # Get all folders in the root path
         lang_pair = "es-en"
 
-        file_title = "__" + "compare_m"  #"model_size_health_biological" #"hbm_basic"  # vocab_domain_m
-        metric = ("sacrebleu_bleu", "bleu")  # (ID, pretty name)
+        file_title = "__" + "compare_h"  #"model_size_health_biological" #"hbm_basic"  # vocab_domain_m
+        metric = ("sacrebleu_chrf", "chrf")  # (ID, pretty name)
         datasets = [(os.path.join(DATASETS_PATH, TOK_FOLDER, x), l) for x, l in [
 
             # Basic ***********
@@ -123,15 +127,15 @@ if __name__ == "__main__":
             # ("health_biological_fairseq_vmerged_es-en", [("checkpoint_best.pt", "H→B\n(small; VD=M)")]),
 
             # Compare ***********
-            # ("health_fairseq_vhealth_es-en", [("checkpoint_best.pt", "Health\n(small; VD=H)")]),
-            # ("biological_fairseq_vhealth_es-en", [("checkpoint_best.pt", "Biological\n(small; VD=H)")]),
-            # ("merged_fairseq_vhealth_es-en", [("checkpoint_best.pt", "Merged\n(small; VD=H)")]),
-            # ("health_biological_fairseq_vhealth_es-en", [("checkpoint_best.pt", "H→B\n(small; VD=H)")]),
-            #
-            # ("health_fairseq_vbiological_es-en", [("checkpoint_best.pt", "Health\n(small; VD=B)")]),
-            # ("biological_fairseq_vbiological_es-en", [("checkpoint_best.pt", "Biological\n(small; VD=B)")]),
-            # ("merged_fairseq_vbiological_es-en", [("checkpoint_best.pt", "Merged\n(small; VD=B)")]),
-            # ("health_biological_fairseq_vbiological_es-en", [("checkpoint_best.pt", "H→B\n(small; VD=B)")]),
+            ("health_fairseq_vhealth_es-en", [("checkpoint_best.pt", "Health\n(small; VD=H)")]),
+            ("biological_fairseq_vhealth_es-en", [("checkpoint_best.pt", "Biological\n(small; VD=H)")]),
+            ("merged_fairseq_vhealth_es-en", [("checkpoint_best.pt", "Merged\n(small; VD=H)")]),
+            ("health_biological_fairseq_vhealth_es-en", [("checkpoint_best.pt", "H→B\n(small; VD=H)")]),
+
+            ("health_fairseq_vbiological_es-en", [("checkpoint_best.pt", "Health\n(small; VD=B)")]),
+            ("biological_fairseq_vbiological_es-en", [("checkpoint_best.pt", "Biological\n(small; VD=B)")]),
+            ("merged_fairseq_vbiological_es-en", [("checkpoint_best.pt", "Merged\n(small; VD=B)")]),
+            ("health_biological_fairseq_vbiological_es-en", [("checkpoint_best.pt", "H→B\n(small; VD=B)")]),
 
             ("health_fairseq_vmerged_es-en", [("checkpoint_best.pt", "Health\n(small; VD=M)")]),
             ("biological_fairseq_vmerged_es-en", [("checkpoint_best.pt", "Biological\n(small; VD=M)")]),
@@ -183,16 +187,16 @@ if __name__ == "__main__":
                 print(f"Getting model ({fname_base}; {model_name})...")
                 metrics += get_metrics(dataset, src, trg, model_name=model_name, label=label, train_domain=domain)
 
-        # Create folder
-        summary_path = os.path.join(DATASETS_PATH, TOK_FOLDER, DATASET_SUMMARY_NAME, "metrics")
-        Path(summary_path).mkdir(parents=True, exist_ok=True)
+    # Create folder
+    summary_path = os.path.join(DATASETS_PATH, "all", DATASET_SUMMARY_NAME, "metrics")
+    Path(summary_path).mkdir(parents=True, exist_ok=True)
 
-        # Save data
-        df = pd.DataFrame(metrics)
-        print(df)
-        df.to_csv(os.path.join(summary_path, f"test_data_{VOCAB_STR}_{file_title}.csv"))
-        print("Data saved!")
+    # Save data
+    df = pd.DataFrame(metrics)
+    print(df)
+    df.to_csv(os.path.join(summary_path, f"test_data_all_{file_title}.csv"))
+    print("Data saved!")
 
-        # Plot metrics
-        plot_metrics(df, savepath=summary_path, lang_pair=lang_pair, metric=metric, file_title=file_title, tok_size=TOK_SIZE)
-        print("Done!")
+    # Plot metrics
+    plot_metrics(df, savepath=summary_path, lang_pair=lang_pair, metric=metric, file_title=file_title)
+    print("Done!")

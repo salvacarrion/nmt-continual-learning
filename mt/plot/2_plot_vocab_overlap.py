@@ -15,16 +15,16 @@ import seaborn as sns
 sns.set()
 
 TOK_MODEL = "bpe"
-TOK_SIZE = 8000
-TOK_FOLDER = f"{TOK_MODEL}.{TOK_SIZE}"
+TOK_SIZES = [32000, 16000, 8000, 4000, 2000, 1000, 500, 256, 128, 64]
+
 DOMAINS = ["health", "biological", "merged"]
-VOCAB_STR = str(TOK_SIZE)[:-3] + "k"
 LANG_PAIR = "es-en"
-METRIC = "iou"
+METRIC = "iov"
 
 
-def get_vocabs(lang_pair):
+def get_vocabs(lang_pair, tok_size):
     vocabs = {}
+    TOK_FOLDER = f"{TOK_MODEL}.{tok_size}"
 
     # Get all folders in the root path
     for domain in DOMAINS:
@@ -64,7 +64,9 @@ def compute_overlap(vocabs, lang_pair):
     return df
 
 
-def plot_heat_map(df, lang_pair, metric, savepath):
+def plot_heat_map(df, lang_pair, metric, savepath, tok_size):
+    VOCAB_STR = str(tok_size)[:-3] + "k" if len(str(tok_size)) > 3 else str(tok_size)
+
     for lang in lang_pair.split("-"):
         plt.figure()
         data = np.zeros((3, 3))
@@ -95,23 +97,27 @@ def plot_heat_map(df, lang_pair, metric, savepath):
 
 
 if __name__ == "__main__":
-    file_title = "__" + "vocab_overlap"
 
-    # Create folder
-    summary_path = os.path.join(DATASETS_PATH, TOK_FOLDER, DATASET_SUMMARY_NAME, "vocab_overlap")
-    Path(summary_path).mkdir(parents=True, exist_ok=True)
+    for tok_size in TOK_SIZES:
+        TOK_FOLDER = f"{TOK_MODEL}.{tok_size}"
+        VOCAB_STR = str(tok_size)[:-3] + "k" if len(str(tok_size)) > 3 else str(tok_size)
+        file_title = "__" + "vocab_overlap"
 
-    # Get vocabs
-    vocabs = get_vocabs(LANG_PAIR)
+        # Create folder
+        summary_path = os.path.join(DATASETS_PATH, TOK_FOLDER, DATASET_SUMMARY_NAME, "vocab_overlap")
+        Path(summary_path).mkdir(parents=True, exist_ok=True)
 
-    # Compute overlap and print
-    df = compute_overlap(vocabs, LANG_PAIR)
-    print(df)
+        # Get vocabs
+        vocabs = get_vocabs(LANG_PAIR, tok_size)
 
-    # Save file
-    df.to_csv(os.path.join(summary_path, f"overlapping_{VOCAB_STR}_{LANG_PAIR}.csv"), index=False)
-    print("File saved!")
+        # Compute overlap and print
+        df = compute_overlap(vocabs, LANG_PAIR)
+        print(df)
 
-    # Plot heatmap
-    plot_heat_map(df, LANG_PAIR, METRIC, summary_path)
-    print("Done!")
+        # Save file
+        df.to_csv(os.path.join(summary_path, f"overlapping_{VOCAB_STR}_{LANG_PAIR}.csv"), index=False)
+        print("File saved!")
+
+        # Plot heatmap
+        plot_heat_map(df, LANG_PAIR, METRIC, summary_path, tok_size)
+        print("Done!")

@@ -6,7 +6,7 @@ from mt import utils
 from mt import DATASETS_PATH, DATASET_BPE_NAME
 
 TOK_MODEL = "bpe"  # wt
-TOK_SIZE = 2000
+TOK_SIZE = 32000
 TOK_FOLDER = f"{TOK_MODEL}.{TOK_SIZE}"
 
 
@@ -23,17 +23,18 @@ if __name__ == "__main__":
     # datasets = [os.path.join(DATASETS_PATH, x) for x in ["health_fairseq_es-en", "biological_fairseq_es-en", "merged_fairseq_es-en"]]
     # datasets = [os.path.join(DATASETS_PATH, x) for x in ["health_biological_fairseq_es-en"]]
     datasets = [os.path.join(DATASETS_PATH, TOK_FOLDER, x) for x in [
-        "health_fairseq_vhealth_es-en",
-        "health_fairseq_vbiological_es-en",
-        "health_fairseq_vmerged_es-en",
-
-        "biological_fairseq_vhealth_es-en",
-        "biological_fairseq_vbiological_es-en",
-        "biological_fairseq_vmerged_es-en",
-
-        "merged_fairseq_vhealth_es-en",
-        "merged_fairseq_vbiological_es-en",
-        "merged_fairseq_vmerged_es-en",
+        "europarl_fairseq_es-en",
+        # "health_fairseq_vhealth_es-en",
+        # "health_fairseq_vbiological_es-en",
+        # "health_fairseq_vmerged_es-en",
+        #
+        # "biological_fairseq_vhealth_es-en",
+        # "biological_fairseq_vbiological_es-en",
+        # "biological_fairseq_vmerged_es-en",
+        #
+        # "merged_fairseq_vhealth_es-en",
+        # "merged_fairseq_vbiological_es-en",
+        # "merged_fairseq_vmerged_es-en",
 
         # "health_biological_fairseq_vhealth_es-en",
         # "health_biological_fairseq_vbiological_es-en",

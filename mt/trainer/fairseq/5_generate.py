@@ -11,15 +11,13 @@ from mt import utils
 from mt import DATASETS_PATH, DATASET_EVAL_NAME, DATASET_CLEAN_SORTED_NAME, DATASET_TOK_NAME, DATASET_LOGS_NAME, DATASET_CHECKPOINT_NAME
 
 TOK_MODEL = "bpe"
-TOK_SIZE = 2000
-TOK_FOLDER = f"{TOK_MODEL}.{TOK_SIZE}"
 DOMAINS = ["health", "biological", "merged"]
 BEAMS = [5]
 
 
-def generate(train_dataset, src, trg, model_name, train_domain):
+def generate(train_dataset, src, trg, model_name, train_domain, tok_folder):
     # Get all folders in the root path
-    test_datasets = [os.path.join(DATASETS_PATH, TOK_FOLDER, x) for x in [f"health_fairseq_vhealth_{src}-{trg}",
+    test_datasets = [os.path.join(DATASETS_PATH, tok_folder, x) for x in [f"health_fairseq_vhealth_{src}-{trg}",
                                                                           f"biological_fairseq_vbiological_{src}-{trg}",
                                                                           f"merged_fairseq_vmerged_{src}-{trg}"]]
     for test_dataset in test_datasets:
@@ -37,7 +35,7 @@ def generate(train_dataset, src, trg, model_name, train_domain):
         vocab_path = train_dataset
         output_path = eval_path
         print(f"\t- Preprocessing datasets for: {test_domain}...")
-        subprocess.call(['sh', './scripts/3_preprocess.sh', source_dataset, vocab_path, output_path, TOK_FOLDER, src, trg])
+        subprocess.call(['sh', './scripts/3_preprocess.sh', source_dataset, vocab_path, output_path, tok_folder, src, trg])
 
         # Generate them
         for beam in BEAMS:
@@ -61,43 +59,12 @@ def generate(train_dataset, src, trg, model_name, train_domain):
     print("")
 
 
-def get_scores(train_dataset, src, trg, model_name, train_domain):
-    # Get all folders in the root path
-    test_datasets = [os.path.join(DATASETS_PATH, TOK_FOLDER, x) for x in [f"health_fairseq_vhealth_{src}-{trg}",
-                                                                          f"biological_fairseq_vbiological_{src}-{trg}",
-                                                                          f"merged_fairseq_vmerged_{src}-{trg}"]]
-    for test_dataset in test_datasets:
-        test_domain, (test_src, test_trg) = utils.get_dataset_ids(test_dataset)
-        test_domain = test_domain.replace("_fairseq", "").replace("_vhealth", "").replace("_vbiological", "").replace("_vmerged", "")
-        print(f"=> TESTING MODEL FROM '{train_domain}' IN DOMAIN '{test_domain}'")
-
-        # Create path
-        eval_path = os.path.join(train_dataset, DATASET_EVAL_NAME, model_name, test_domain)
-
-        # Read file
-        with open(os.path.join(eval_path, "generate-test.txt"), 'r') as f:
-            score_summary = f.readlines()[-1]
-            print(score_summary)
-
-        # Parse metrics
-        pattern = r"beam=(\d+): BLEU\d+ = (\d+.\d+)"
-        beam_width, score_bleu = re.search(pattern, score_summary).groups()
-        beam_width, score_bleu = int(beam_width), float(score_bleu)
-        metrics = {f"beam{beam_width}": {'sacrebleu_bleu': score_bleu}}
-
-        # Save metrics to file
-        with open(os.path.join(eval_path, 'metrics.json'), 'w') as f:
-            json.dump(metrics, f)
-        # print("Metrics saved!")
-    print("------------------------------------------------------------------------")
-
-
-def get_beam_scores(train_dataset, src, trg):
+def get_beam_scores(train_dataset, src, trg, tok_folder):
     domain, (src, trg) = utils.get_dataset_ids(dataset)
     fname_base = f"{domain}_{src}-{trg}"
 
     # Get all folders in the root path
-    test_datasets = [os.path.join(DATASETS_PATH, TOK_FOLDER, x) for x in [f"health_fairseq_vhealth_{src}-{trg}",
+    test_datasets = [os.path.join(DATASETS_PATH, tok_folder, x) for x in [f"health_fairseq_vhealth_{src}-{trg}",
                                                                           f"biological_fairseq_vbiological_{src}-{trg}",
                                                                           f"merged_fairseq_vmerged_{src}-{trg}"]]
     metrics = {"beams": {}}
@@ -169,59 +136,46 @@ def get_beam_scores(train_dataset, src, trg):
 
 
 if __name__ == "__main__":
-    # Get all folders in the root path
-    # datasets = [os.path.join(DATASETS_PATH, x) for x in ["health_es-en", "biological_es-en", "merged_es-en"]]
-    datasets = [(os.path.join(DATASETS_PATH, TOK_FOLDER, x), l) for x, l in [
-        # ("health_fairseq_es-en", ["checkpoint_best.pt"]),
-        # ("biological_fairseq_es-en", ["checkpoint_best.pt"]),
-        # ("merged_fairseq_es-en", ["checkpoint_best.pt"]),
-        # ("health_biological_fairseq_es-en", ["checkpoint_best.pt"]),
-        #
-        # ("biological_fairseq_vhealth_es-en", ["checkpoint_best.pt"]),
-        # ("biological_fairseq_vmerged_es-en", ["checkpoint_best.pt"]),
-        # ("health_fairseq_vbiological_es-en", ["checkpoint_best.pt"]),
-        # ("health_fairseq_vmerged_es-en", ["checkpoint_best.pt"]),
-        # ("merged_fairseq_vbiological_es-en", ["checkpoint_best.pt"]),
-        # ("merged_fairseq_vhealth_es-en", ["checkpoint_best.pt"]),
-        #
-        # ("health_biological_fairseq_vbiological_es-en", ["checkpoint_best.pt"]),
-        # ("health_biological_fairseq_vmerged_es-en", ["checkpoint_best.pt"]),
+    for TOK_SIZE in [128, 64]:
+        TOK_FOLDER = f"{TOK_MODEL}.{TOK_SIZE}"
 
-        # Fairseq (small): Health
-        ("health_fairseq_vhealth_es-en", ["checkpoint_best.pt"]),
-        ("health_fairseq_vbiological_es-en", ["checkpoint_best.pt"]),
-        ("health_fairseq_vmerged_es-en", ["checkpoint_best.pt"]),
-        #
-        # # Fairseq (small): Biological
-        ("biological_fairseq_vhealth_es-en", ["checkpoint_best.pt"]),
-        ("biological_fairseq_vbiological_es-en", ["checkpoint_best.pt"]),
-        ("biological_fairseq_vmerged_es-en", ["checkpoint_best.pt"]),
-        #
-        # # Fairseq (small): Merged
-        ("merged_fairseq_vhealth_es-en", ["checkpoint_best.pt"]),
-        ("merged_fairseq_vbiological_es-en", ["checkpoint_best.pt"]),
-        ("merged_fairseq_vmerged_es-en", ["checkpoint_best.pt"]),
-        #
-        # # Fairseq (small): H->B
-        ("health_biological_fairseq_vhealth_es-en", ["checkpoint_best.pt"]),
-        ("health_biological_fairseq_vbiological_es-en", ["checkpoint_best.pt"]),
-        ("health_biological_fairseq_vmerged_es-en", ["checkpoint_best.pt"]),
+        # Get all folders in the root path
+        # datasets = [os.path.join(DATASETS_PATH, x) for x in ["health_es-en", "biological_es-en", "merged_es-en"]]
+        datasets = [(os.path.join(DATASETS_PATH, TOK_FOLDER, x), l) for x, l in [
+            # Fairseq (small): Health
+            ("health_fairseq_vhealth_es-en", ["checkpoint_best.pt"]),
+            ("health_fairseq_vbiological_es-en", ["checkpoint_best.pt"]),
+            ("health_fairseq_vmerged_es-en", ["checkpoint_best.pt"]),
+            #
+            # # Fairseq (small): Biological
+            ("biological_fairseq_vhealth_es-en", ["checkpoint_best.pt"]),
+            ("biological_fairseq_vbiological_es-en", ["checkpoint_best.pt"]),
+            ("biological_fairseq_vmerged_es-en", ["checkpoint_best.pt"]),
+            #
+            # # Fairseq (small): Merged
+            ("merged_fairseq_vhealth_es-en", ["checkpoint_best.pt"]),
+            ("merged_fairseq_vbiological_es-en", ["checkpoint_best.pt"]),
+            ("merged_fairseq_vmerged_es-en", ["checkpoint_best.pt"]),
+            #
+            # # Fairseq (small): H->B
+            ("health_biological_fairseq_vhealth_es-en", ["checkpoint_best.pt"]),
+            ("health_biological_fairseq_vbiological_es-en", ["checkpoint_best.pt"]),
+            ("health_biological_fairseq_vmerged_es-en", ["checkpoint_best.pt"]),
 
-        # Fairseq (large): All
-        # ("health_fairseq_large_vhealth_es-en", ["checkpoint_best.pt"]),
-        # ("biological_fairseq_large_vbiological_es-en", ["checkpoint_best.pt"]),
-        # ("merged_fairseq_large_vmerged_es-en", ["checkpoint_best.pt"]),
-        # ("health_biological_fairseq_large_vhealth_es-en", ["checkpoint_best.pt"]),
-    ]]
+            # Fairseq (large): All
+            # ("health_fairseq_large_vhealth_es-en", ["checkpoint_best.pt"]),
+            # ("biological_fairseq_large_vbiological_es-en", ["checkpoint_best.pt"]),
+            # ("merged_fairseq_large_vmerged_es-en", ["checkpoint_best.pt"]),
+            # ("health_biological_fairseq_large_vhealth_es-en", ["checkpoint_best.pt"]),
+        ]]
 
-    for dataset, models in datasets:
-        domain, (src, trg) = utils.get_dataset_ids(dataset)
-        fname_base = f"{domain}_{src}-{trg}"
+        for dataset, models in datasets:
+            domain, (src, trg) = utils.get_dataset_ids(dataset)
+            fname_base = f"{domain}_{src}-{trg}"
 
-        # Train model
-        for model_name in models:
-            print(f"Testing model ({fname_base}; {model_name})...")
+            # Train model
+            for model_name in models:
+                print(f"Testing model ({fname_base}; {model_name})...")
 
-            generate(dataset, src, trg, model_name=model_name, train_domain=domain)
-            # get_scores(dataset, src, trg, model_name=model_name, train_domain=domain)  # Old
-            get_beam_scores(dataset, src, trg)
+                generate(dataset, src, trg, model_name=model_name, train_domain=domain, tok_folder=TOK_FOLDER)
+                get_beam_scores(dataset, src, trg, TOK_FOLDER)

@@ -60,7 +60,7 @@ def preprocess_text(text):
         text = p_whitespace.sub(' ', text)
 
         # Normalization Form Compatibility Composition
-        text = unicodedata.normalize("NFD", text)
+        text = unicodedata.normalize("NFKC", text)  # Dangerous: https://www.gushiciku.cn/pl/pl4g
 
         # Strip whitespace
         text = text.strip()
