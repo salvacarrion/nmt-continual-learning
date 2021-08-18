@@ -10,7 +10,7 @@ WANDB_PROJECT = "nmt"  # Run "wandb login" in the terminal
 USE_LARGE_MODEL = False
 
 TOK_MODEL = "bpe"  # wt
-TOK_SIZE = 32000
+TOK_SIZE = 64
 TOK_FOLDER = f"{TOK_MODEL}.{TOK_SIZE}"
 
 
@@ -22,7 +22,7 @@ def train(datapath):
 if __name__ == "__main__":
     # Get all folders in the root path
     datasets = [os.path.join(DATASETS_PATH, TOK_FOLDER, x) for x in [
-        "europarl_fairseq_es-en",
+        "multi30k_de-en",
         # "health_fairseq_vhealth_es-en",
         # "health_fairseq_vbiological_es-en",
         # "health_fairseq_vmerged_es-en",

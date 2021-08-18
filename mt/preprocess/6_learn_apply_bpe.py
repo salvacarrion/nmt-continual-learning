@@ -5,13 +5,13 @@ import subprocess
 from mt import DATASETS_PATH, DATASET_TOK_NAME, DATASET_BPE_NAME, FASTBPE_PATH
 from mt import utils
 
-VOCAB_SIZE = 32000
+VOCAB_SIZE = 64
 TOK_FOLDER = f"{DATASET_BPE_NAME}.{VOCAB_SIZE}"
 SAVE_VOCABS = True
 
 # Get all folders in the root path
 datasets = [os.path.join(DATASETS_PATH, TOK_FOLDER, x) for x in [
-    "europarl_fairseq_es-en",
+    "multi30k_de-en",
     # "health_fairseq_vhealth_es-en",
     # "health_fairseq_vbiological_es-en",
     # "health_fairseq_vmerged_es-en",

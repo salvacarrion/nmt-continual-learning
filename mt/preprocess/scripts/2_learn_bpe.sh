@@ -11,7 +11,7 @@ FASTBPE_PATH=$6
 # Fast BPE: https://github.com/glample/fastBPE
 
 # Show constants
-echo "Applying BPE... ****************"
+echo "Learning BPE codes... ****************"
 echo "- Source language: "$SRC_LANG
 echo "- Target language: "$TRG_LANG
 echo "- Base path: "$BASE_PATH

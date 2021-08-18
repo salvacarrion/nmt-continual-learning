@@ -6,7 +6,7 @@ from mt import DATASETS_PATH, DATASET_CLEAN_NAME
 from mt import utils
 
 # Get all folders in the root path
-datasets = [os.path.join(DATASETS_PATH, "bpe.32000/europarl_fairseq_es-en")]
+datasets = [os.path.join(DATASETS_PATH, "bpe.32000/multi30k_de-en")]
 for dataset in datasets:
     domain, (src, trg) = utils.get_dataset_ids(dataset)
     fname_base = f"{domain}_{src}-{trg}"
