@@ -118,8 +118,31 @@ if __name__ == "__main__":
         # Get all folders in the root path
         # datasets = [os.path.join(DATASETS_PATH, x) for x in ["health_es-en", "biological_es-en", "merged_es-en"]]
         datasets = [(os.path.join(DATASETS_PATH, TOK_FOLDER, x), l) for x, l in [
+            # ("europarl_fairseq_de-en", ["checkpoint_best.pt"]),
+            # ("europarl_fairseq_100k_de-en", ["checkpoint_best.pt"]),
+            # ("commoncrawl_es-en", ["checkpoint_best.pt"]),
+            # ("commoncrawl_100k_es-en", ["checkpoint_best.pt"]),
             #("multi30k_de-en", ["checkpoint_best.pt"]),
+            # ("europarl_fairseq_es-en", ["checkpoint_best.pt"]),
+            # ("newscommentaryv14_es-en", ["checkpoint_best.pt"]),
+            # ("newscommentaryv14_35k_es-en", ["checkpoint_best.pt"]),
+            # ("europarl_fairseq_100k_es-en", ["checkpoint_best.pt"]),
+            # ("health_fairseq_vhealth_unconstrained2_es-en", ["checkpoint_best.pt"]),
+            # ("iwlst2016_de-en", ["checkpoint_best.pt"]),
+
             ("europarl_fairseq_es-en", ["checkpoint_best.pt"]),
+            ("europarl_fairseq_100k_es-en", ["checkpoint_best.pt"]),
+            ("europarl_fairseq_de-en", ["checkpoint_best.pt"]),
+            ("europarl_fairseq_100k_de-en", ["checkpoint_best.pt"]),
+            ("health_fairseq_vhealth_unconstrained_es-en", ["checkpoint_best.pt"]),
+            ("health_fairseq_vhealth_es-en", ["checkpoint_best.pt"]),
+            ("commoncrawl_es-en", ["checkpoint_best.pt"]),
+            ("commoncrawl_100k_es-en", ["checkpoint_best.pt"]),
+            ("newscommentaryv14_es-en", ["checkpoint_best.pt"]),
+            ("newscommentaryv14_35k_es-en", ["checkpoint_best.pt"]),
+            # ("multi30k_de-en", ["checkpoint_best.pt"]),
+            ("iwlst2016_de-en", ["checkpoint_best.pt"]),
+
         ]]
 
         for dataset, models in datasets:
@@ -130,5 +153,5 @@ if __name__ == "__main__":
             for model_name in models:
                 print(f"Testing model ({fname_base}; {model_name})...")
 
-                generate(dataset, src, trg, model_name=model_name, train_domain=domain, tok_folder=TOK_FOLDER)
+                # generate(dataset, src, trg, model_name=model_name, train_domain=domain, tok_folder=TOK_FOLDER)
                 get_beam_scores(dataset, src, trg, TOK_FOLDER)

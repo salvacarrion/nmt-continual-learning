@@ -45,6 +45,7 @@ fairseq-train \
     --task translation \
     --wandb-project $WANDB_PROJECT \
     --num-workers	$(nproc) \
+#    --skip-invalid-size-inputs-valid-test
 #    --restore-file $BASE_PATH/checkpoints/health_checkpoint_best.pt \
 #    --reset-dataloader \
 #    --reset-lr-scheduler \

@@ -51,13 +51,15 @@ def plot_metrics(df, savepath, lang_pair, metric=("sacrebleu_bleu", "bleu"), sho
         domain = f'{df_row["train_domain"]}__{df_row["test_domain"]}'.lower()
         domain = domain.replace("fairseq_", "")
         domain = domain.replace("health", "h").replace("biological", "b").replace("merged", "m")
-        # if "_vh" in domain: #domain[-1] != domain[-4]:
-        # if domain[-1] == domain[-4]:
-        # domain = domain.replace("__health", "__h").replace("__biological", "__b").replace("__merged", "__m")
-        row = {"train_domain": df_row["train_domain"], "test_domain": df_row["test_domain"],
-               "domain": domain,
-               "vocab_size": df_row["vocab_size"], metric_id: df_row[metric_id]}
-        rows.append(row)
+        tr = domain[:-6]
+        ts = domain[-1]
+        vocab = domain[-4:-3]
+        if tr == ts:
+            domain_text = "Voc. domain == Tr/Ts domain" if tr == ts == vocab else "Voc. domain != Tr/Ts domain"
+            row = {"train_domain": df_row["train_domain"], "test_domain": df_row["test_domain"],
+                   "domain": domain,
+                   "vocab_size": df_row["vocab_size"], metric_id: df_row[metric_id]}
+            rows.append(row)
     df_new = pd.DataFrame(rows)
     g = sns.lineplot(data=df_new, x="vocab_size", y=metric_id, hue="domain")
 
@@ -72,11 +74,11 @@ def plot_metrics(df, savepath, lang_pair, metric=("sacrebleu_bleu", "bleu"), sho
     # plt.savefig(os.path.join(savepath, f"{metric_id}_{VOCAB_STR}_scores_{lang_pair}{file_title}.svg"))
     # plt.savefig(os.path.join(savepath, f"{metric_id}_{VOCAB_STR}_scores_{lang_pair}{file_title}.png"))
     # print("Figures saved!")
-    #
-    # # Save figure (together)
-    # plt.savefig(os.path.join(DATASETS_PATH, "temp", f"{metric_id}_{VOCAB_STR}_scores_{lang_pair}{file_title}.pdf"))
-    # plt.savefig(os.path.join(DATASETS_PATH, "temp", f"{metric_id}_{VOCAB_STR}_scores_{lang_pair}{file_title}.svg"))
-    # plt.savefig(os.path.join(DATASETS_PATH, "temp", f"{metric_id}_{VOCAB_STR}_scores_{lang_pair}{file_title}.png"))
+
+    # Save figure (together)
+    plt.savefig(os.path.join(DATASETS_PATH, "all", "summary", f"{metric_id}_{VOCAB_STR}_scores_{lang_pair}{file_title}.pdf"))
+    plt.savefig(os.path.join(DATASETS_PATH, "all", "summary", f"{metric_id}_{VOCAB_STR}_scores_{lang_pair}{file_title}.svg"))
+    plt.savefig(os.path.join(DATASETS_PATH, "all", "summary", f"{metric_id}_{VOCAB_STR}_scores_{lang_pair}{file_title}.png"))
 
     # Show plot
     plt.show()
@@ -95,8 +97,8 @@ if __name__ == "__main__":
         # Get all folders in the root path
         lang_pair = "es-en"
 
-        file_title = "__" + "compare_h"  #"model_size_health_biological" #"hbm_basic"  # vocab_domain_m
-        metric = ("sacrebleu_chrf", "chrf")  # (ID, pretty name)
+        file_title = "__" + "domain_hbm__no_seq__tr_eq_ts__no_simplified"  #"model_size_health_biological" #"hbm_basic"  # vocab_domain_m
+        metric = ("sacrebleu_bleu", "bleu")  # (ID, pretty name)
         datasets = [(os.path.join(DATASETS_PATH, TOK_FOLDER, x), l) for x, l in [
 
             # Basic ***********
@@ -130,17 +132,17 @@ if __name__ == "__main__":
             ("health_fairseq_vhealth_es-en", [("checkpoint_best.pt", "Health\n(small; VD=H)")]),
             ("biological_fairseq_vhealth_es-en", [("checkpoint_best.pt", "Biological\n(small; VD=H)")]),
             ("merged_fairseq_vhealth_es-en", [("checkpoint_best.pt", "Merged\n(small; VD=H)")]),
-            ("health_biological_fairseq_vhealth_es-en", [("checkpoint_best.pt", "H→B\n(small; VD=H)")]),
+            # ("health_biological_fairseq_vhealth_es-en", [("checkpoint_best.pt", "H→B\n(small; VD=H)")]),
 
             ("health_fairseq_vbiological_es-en", [("checkpoint_best.pt", "Health\n(small; VD=B)")]),
             ("biological_fairseq_vbiological_es-en", [("checkpoint_best.pt", "Biological\n(small; VD=B)")]),
             ("merged_fairseq_vbiological_es-en", [("checkpoint_best.pt", "Merged\n(small; VD=B)")]),
-            ("health_biological_fairseq_vbiological_es-en", [("checkpoint_best.pt", "H→B\n(small; VD=B)")]),
-
+            # # ("health_biological_fairseq_vbiological_es-en", [("checkpoint_best.pt", "H→B\n(small; VD=B)")]),
+            #
             ("health_fairseq_vmerged_es-en", [("checkpoint_best.pt", "Health\n(small; VD=M)")]),
             ("biological_fairseq_vmerged_es-en", [("checkpoint_best.pt", "Biological\n(small; VD=M)")]),
             ("merged_fairseq_vmerged_es-en", [("checkpoint_best.pt", "Merged\n(small; VD=M)")]),
-            ("health_biological_fairseq_vmerged_es-en", [("checkpoint_best.pt", "H→B\n(small; VD=M)")]),
+            # ("health_biological_fairseq_vmerged_es-en", [("checkpoint_best.pt", "H→B\n(small; VD=M)")]),
 
 
             # Model size (16k only) ***********
