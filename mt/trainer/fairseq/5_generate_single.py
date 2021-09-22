@@ -130,8 +130,9 @@ if __name__ == "__main__":
             # ("health_fairseq_vhealth_unconstrained2_es-en", ["checkpoint_best.pt"]),
             # ("iwlst2016_de-en", ["checkpoint_best.pt"]),
 
-            ("europarl_fairseq_50k_cs-en", ["checkpoint_best.pt"]),
-            ("europarl_fairseq_50k_es-en", ["checkpoint_best.pt"]),
+            ("europarl_fairseq_50k_de-en", ["checkpoint_best.pt"]),
+            # ("europarl_fairseq_50k_cs-en", ["checkpoint_best.pt"]),
+            # ("europarl_fairseq_50k_es-en", ["checkpoint_best.pt"]),
 
             # ("europarl_fairseq_es-en", ["checkpoint_best.pt"]),
             # ("europarl_fairseq_100k_es-en", ["checkpoint_best.pt"]),
