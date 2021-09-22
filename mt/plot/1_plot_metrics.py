@@ -56,10 +56,10 @@ def plot_metrics(df_metrics, savepath, lang_pair, metric=("sacrebleu_bleu", "ble
 
     # properties
     g.set(xlabel='Models', ylabel=metric_name.upper())
+    g.set_xticklabels(rotation=0, horizontalalignment="center")
     plt.title(f"{metric_name.upper()} scores in different domains | {VOCAB_STR} | {lang_pair}")
     plt.ylim([0, 100])
-
-    g.set_xticklabels(rotation=0, horizontalalignment="center")
+    plt.rcParams['figure.figsize'] = (12, 8)
     plt.legend(loc='lower right')
     plt.tight_layout()
 

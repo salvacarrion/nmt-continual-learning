@@ -130,18 +130,21 @@ if __name__ == "__main__":
             # ("health_fairseq_vhealth_unconstrained2_es-en", ["checkpoint_best.pt"]),
             # ("iwlst2016_de-en", ["checkpoint_best.pt"]),
 
-            ("europarl_fairseq_es-en", ["checkpoint_best.pt"]),
-            ("europarl_fairseq_100k_es-en", ["checkpoint_best.pt"]),
-            ("europarl_fairseq_de-en", ["checkpoint_best.pt"]),
-            ("europarl_fairseq_100k_de-en", ["checkpoint_best.pt"]),
-            ("health_fairseq_vhealth_unconstrained_es-en", ["checkpoint_best.pt"]),
-            ("health_fairseq_vhealth_es-en", ["checkpoint_best.pt"]),
-            ("commoncrawl_es-en", ["checkpoint_best.pt"]),
-            ("commoncrawl_100k_es-en", ["checkpoint_best.pt"]),
-            ("newscommentaryv14_es-en", ["checkpoint_best.pt"]),
-            ("newscommentaryv14_35k_es-en", ["checkpoint_best.pt"]),
-            # ("multi30k_de-en", ["checkpoint_best.pt"]),
-            ("iwlst2016_de-en", ["checkpoint_best.pt"]),
+            ("europarl_fairseq_50k_cs-en", ["checkpoint_best.pt"]),
+            ("europarl_fairseq_50k_es-en", ["checkpoint_best.pt"]),
+
+            # ("europarl_fairseq_es-en", ["checkpoint_best.pt"]),
+            # ("europarl_fairseq_100k_es-en", ["checkpoint_best.pt"]),
+            # ("europarl_fairseq_de-en", ["checkpoint_best.pt"]),
+            # ("europarl_fairseq_100k_de-en", ["checkpoint_best.pt"]),
+            # ("health_fairseq_vhealth_unconstrained_es-en", ["checkpoint_best.pt"]),
+            # ("health_fairseq_vhealth_es-en", ["checkpoint_best.pt"]),
+            # ("commoncrawl_es-en", ["checkpoint_best.pt"]),
+            # ("commoncrawl_100k_es-en", ["checkpoint_best.pt"]),
+            # ("newscommentaryv14_es-en", ["checkpoint_best.pt"]),
+            # ("newscommentaryv14_35k_es-en", ["checkpoint_best.pt"]),
+            # # ("multi30k_de-en", ["checkpoint_best.pt"]),
+            # ("iwlst2016_de-en", ["checkpoint_best.pt"]),
 
         ]]
 
@@ -153,5 +156,5 @@ if __name__ == "__main__":
             for model_name in models:
                 print(f"Testing model ({fname_base}; {model_name})...")
 
-                # generate(dataset, src, trg, model_name=model_name, train_domain=domain, tok_folder=TOK_FOLDER)
+                generate(dataset, src, trg, model_name=model_name, train_domain=domain, tok_folder=TOK_FOLDER)
                 get_beam_scores(dataset, src, trg, TOK_FOLDER)

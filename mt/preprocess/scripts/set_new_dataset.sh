@@ -1,5 +1,6 @@
-# 0.0 Create H_H, B_B, M_M
-# 0.1 Extend
+# 0.0 Create new folder with (H_H, B_B, M_M) from another
+
+# 0.1 Create new datasets (training data only; ignore rest)
 cp -R health_fairseq_vhealth_es-en/ health_fairseq_vbiological_es-en/
 cp -R health_fairseq_vhealth_es-en/ health_fairseq_vmerged_es-en/
 cp -R biological_fairseq_vbiological_es-en/ biological_fairseq_vhealth_es-en/
