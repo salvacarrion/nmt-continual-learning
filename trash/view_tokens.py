@@ -3,7 +3,7 @@ import os
 def view_tokens():
 
     datasets = [
-        "europarl_fairseq_50k_de-en",
+        "europarl_fairseq_de-en",
         # "europarl_fairseq_50k_es-en",
         # "europarl_fairseq_50k_cs-en",
 

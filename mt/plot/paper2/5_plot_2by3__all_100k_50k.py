@@ -30,9 +30,10 @@ def plot_bleu_bpe(show_values=True, metric_id="sacrebleu_bleu", metric_name="BLE
     df = pd.DataFrame(data=experiments)
 
     # Define subplots => px, py = w*dpi, h*dpi  # pixels
-    fig, axes = plt.subplots(2, 3, figsize=(24, 10), dpi=150)  # (nrows, ncols), (W, H), dpi
+    size = (3, 3)  # W, H
+    fig, axes = plt.subplots(size[0], size[1], figsize=(12*size[0], 3*size[1]), dpi=150)  # (nrows, ncols), (W, H), dpi
 
-    # Image 0
+    # Image 00
     data = df.loc[df['id'].isin({"1.1", "1.2"})]
     axes[0, 0].set_title("Europarl-2M (es-en)")
     g0 = sns.barplot(ax=axes[0, 0], data=data, x="name", y=metric_id, hue="bpe")
@@ -45,22 +46,35 @@ def plot_bleu_bpe(show_values=True, metric_id="sacrebleu_bleu", metric_name="BLE
     axes[0, 2].set_title("Europarl-50k (es-en)")
     g2 = sns.barplot(ax=axes[0, 2], data=data, x="name", y=metric_id, hue="bpe")
 
-    # Image 1
-    data = df.loc[df['id'].isin({"0.1", "0.2"})]
-    axes[1, 0].set_title("Europarl-630k (cs-en)")
+    # Image 2
+    data = df.loc[df['id'].isin({"2.1", "2.2"})]
+    axes[1, 0].set_title("Europarl-2M (de-en)")
     g3 = sns.barplot(ax=axes[1, 0], data=data, x="name", y=metric_id, hue="bpe")
+
+    data = df.loc[df['id'].isin({"2.3", "2.4"})]
+    axes[1, 1].set_title("Europarl-100k (de-en)")
+    g4 = sns.barplot(ax=axes[1, 1], data=data, x="name", y=metric_id, hue="bpe")
+
+    data = df.loc[df['id'].isin({"2.5", "2.6"})]
+    axes[1, 2].set_title("Europarl-50k (de-en)")
+    g5 = sns.barplot(ax=axes[1, 2], data=data, x="name", y=metric_id, hue="bpe")
+
+    # Image 3
+    data = df.loc[df['id'].isin({"0.1", "0.2"})]
+    axes[2, 0].set_title("Europarl-630k (cs-en)")
+    g6 = sns.barplot(ax=axes[2, 0], data=data, x="name", y=metric_id, hue="bpe")
 
     # Image 2
     data = df.loc[df['id'].isin({"0.3", "0.4"})]
-    axes[1, 1].set_title("Europarl-100k (cs-en)")
-    g4 = sns.barplot(ax=axes[1, 1], data=data, x="name", y=metric_id, hue="bpe")
+    axes[2, 1].set_title("Europarl-100k (cs-en)")
+    g7 = sns.barplot(ax=axes[2, 1], data=data, x="name", y=metric_id, hue="bpe")
 
     # Image 3
     data = df.loc[df['id'].isin({"0.5", "0.6"})]
-    axes[1, 2].set_title("Europarl-50k (cs-en)")
-    g5 = sns.barplot(ax=axes[1, 2], data=data, x="name", y=metric_id, hue="bpe")
+    axes[2, 2].set_title("Europarl-50k (cs-en)")
+    g8 = sns.barplot(ax=axes[2, 2], data=data, x="name", y=metric_id, hue="bpe")
 
-    for gx in [g0, g1, g2, g3, g4, g5]:
+    for gx in [g0, g1, g2, g3, g4, g5, g6, g7, g8]:
         gx.set(xlabel='', ylabel=metric_name.upper())  #
         # gx.set_xticklabels(rotation=0, horizontalalignment="center")
         gx.set_ylim([0, 50])
@@ -79,6 +93,9 @@ def plot_bleu_bpe(show_values=True, metric_id="sacrebleu_bleu", metric_name="BLE
     axes[1, 0].legend(title="", loc=legend_loc)
     axes[1, 1].legend(title="", loc=legend_loc)
     axes[1, 2].legend(title="", loc=legend_loc)
+    axes[2, 0].legend(title="", loc=legend_loc)
+    axes[2, 1].legend(title="", loc=legend_loc)
+    axes[2, 2].legend(title="", loc=legend_loc)
 
     # properties
     plt.ylim([0, 50])
