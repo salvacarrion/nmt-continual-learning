@@ -13,6 +13,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 sns.set()
+sns.set(font_scale=1.5)  # crazy big
 
 TOK_MODEL = "bpe"
 TOK_SIZES = [32000, 16000, 8000, 4000, 2000, 1000, 500, 256, 128, 64]
@@ -104,7 +105,7 @@ if __name__ == "__main__":
         file_title = "__" + "vocab_overlap"
 
         # Create folder
-        summary_path = os.path.join(DATASETS_PATH, TOK_FOLDER, DATASET_SUMMARY_NAME, "vocab_overlap")
+        summary_path = os.path.join(DATASETS_PATH, "custom_plots", "overlaps")
         Path(summary_path).mkdir(parents=True, exist_ok=True)
 
         # Get vocabs

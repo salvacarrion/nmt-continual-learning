@@ -13,7 +13,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 sns.set()
-sns.set(font_scale=1.5)  # crazy big
+sns.set(font_scale=2.5)  # crazy big
 
 
 def get_metrics(datapath, src, trg, model_name, label, train_domain):
@@ -29,45 +29,63 @@ def get_metrics(datapath, src, trg, model_name, label, train_domain):
 
             # Add more data
             row["model_name"] = model_name
-            row["label"] = label
-            row["train_domain"] = train_domain.title()
-            row["test_domain"] = test_domain.title()
+            row["label"] = label.replace("small; ", "").replace("VD", "Voc. domain")
+            row["train_domain"] = train_domain.lower().replace("_fairseq", "").lower()
+            row["test_domain"] = f"{test_domain.title()}"
+            row["vocab_domain"] = row['train_domain'].split('_')[-1][1:].title()
             row["lang"] = f"{src}-{trg}"
             row["vocab_size"] = VOCAB_STR
             metrics.append(row)
     return metrics
 
 
-def plot_metrics(df_metrics, savepath, lang_pair, metric=("sacrebleu_bleu", "bleu"), show_values=True, vocab=None, tok_size=None):
+def plot_metrics(df_metrics, savepath, lang_pair, metric=("sacrebleu_bleu", "bleu"), show_values=True, tok_size=None):
     metric_id, metric_name = metric
+    alias = "_1x2_"
+    TR_DOM_FILTER = {"health_vhealth", "health_biological_vhealth"}
 
     # Get specific language metrics
-    df_lang = df_metrics[df_metrics.lang == lang_pair]
-    # df_lang = df_lang[df_lang.test_domain != "Merged"]  # To remove columns from the chart
+    df_metrics = df_metrics[df_metrics.lang == lang_pair]
+    df_metrics = df_metrics[df_metrics.test_domain != "Merged"]
+    df_metrics = df_metrics[df_metrics.train_domain.isin(TR_DOM_FILTER)]
+
+    # Sort indexes
+    df_metrics["index"] = [0, 1, 2, 3]
+    df_metrics = df_metrics.sort_values(by='index', ascending=True, na_position='first')
+
+    # Define subplots => px, py = w*dpi, h*dpi  # pixels
+    size = (1, 1)  # H, W
+    scales = (6, 12)  # H, W
 
     # Draw a nested barplot by species and sex
-    g = sns.catplot(data=df_lang, x="label", y=metric_id, kind="bar", hue="test_domain", legend=False)
-    g.fig.set_size_inches(12, 8)
+    g = sns.catplot(data=df_metrics, x="label", y=metric_id, kind="bar", hue="test_domain", legend=False)
+    g.fig.set_size_inches(scales[1]*size[1], scales[0]*size[0])
 
     # Add values
     if show_values:
         ax = g.facet_axis(0, 0)
+        ax.set_ylim([0, 50])
+        ax.axes.get_xaxis().get_label().set_visible(False)
+
         for c in ax.containers:
             labels = [f"{float(v.get_height()):.1f}" for v in c]
             ax.bar_label(c, labels=labels, label_type='edge')
 
     # properties
-    g.set(xlabel='Models', ylabel=metric_name.upper())
+    g.set(xlabel='', ylabel=metric_name.upper())
     g.set_xticklabels(rotation=0, horizontalalignment="center")
-    plt.title(f"Voc. domain: {vocab.title()} | BPE codes: {tok_size}")
+    if tok_size == 32000:
+        plt.title(f"Vocabulary size: ~32k tokens")
+    else:
+        plt.title(f"Vocabulary size: ~350 tokens")
     plt.ylim([0, 50])
     plt.legend(loc='lower right')
     plt.tight_layout()
 
     # Save figure
-    plt.savefig(os.path.join(savepath, f"{metric_id}_{tok_size}_v{vocab}.pdf"))
-    plt.savefig(os.path.join(savepath, f"{metric_id}_{tok_size}_v{vocab}.svg"))
-    plt.savefig(os.path.join(savepath, f"{metric_id}_{tok_size}_v{vocab}.png"))
+    plt.savefig(os.path.join(savepath, f"custom_{alias}{metric_id}_{tok_size}.pdf"), dpi=150)
+    plt.savefig(os.path.join(savepath, f"custom_{alias}{metric_id}_{tok_size}.svg"), dpi=150)
+    plt.savefig(os.path.join(savepath, f"custom_{alias}{metric_id}_{tok_size}.png"), dpi=150)
     print("Figures saved!")
 
     # Show plot
@@ -77,7 +95,7 @@ def plot_metrics(df_metrics, savepath, lang_pair, metric=("sacrebleu_bleu", "ble
 
 if __name__ == "__main__":
     # Create folder
-    summary_path = os.path.join(DATASETS_PATH, "custom_plots", "cf")
+    summary_path = os.path.join(DATASETS_PATH, "custom_plots", "cf-custom")
     Path(summary_path).mkdir(parents=True, exist_ok=True)
 
     BEAM_FOLDER = "beam5"
@@ -91,8 +109,8 @@ if __name__ == "__main__":
         TOK_FOLDER = f"{TOK_MODEL}.{TOK_SIZE}"
         VOCAB_STR = str(TOK_SIZE)[:-3] + "k" if len(str(TOK_SIZE)) > 3 else str(TOK_SIZE)
 
-        for vocab in ["biological"]:
-            metrics = []
+        metrics = []
+        for vocab in ["health", "biological", "merged"]:
 
             datasets = [(os.path.join(DATASETS_PATH, TOK_FOLDER, x), l) for x, l in [
                 (f"health_fairseq_v{vocab}_es-en", [("checkpoint_best.pt", f"Health\n(small; VD={vocab[0].upper()})")]),
@@ -112,11 +130,11 @@ if __name__ == "__main__":
                         print(f"Getting model ({fname_base}; {model_name})...")
                         metrics += get_metrics(dataset, src, trg, model_name=model_name, label=label, train_domain=domain)
 
-            # Save data
-            df = pd.DataFrame(metrics)
-            df.to_csv(os.path.join(summary_path, f"data_{TOK_SIZE}_v{vocab}.csv"))
-            print("Data saved!")
+        # Save data
+        df = pd.DataFrame(metrics)
+        df.to_csv(os.path.join(summary_path, f"all_data_{TOK_SIZE}_v{vocab}.csv"))
+        print("Data saved!")
 
-            # Plot metrics
-            plot_metrics(df, savepath=summary_path, lang_pair=lang_pair, metric=metric, vocab=vocab, tok_size=TOK_SIZE)
-            print("Done!")
+        # Plot metrics
+        plot_metrics(df, savepath=summary_path, lang_pair=lang_pair, metric=metric, tok_size=TOK_SIZE)
+        print("Done!")

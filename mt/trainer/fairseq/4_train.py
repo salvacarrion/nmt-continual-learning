@@ -15,14 +15,18 @@ TOK_FOLDER = f"{TOK_MODEL}.{TOK_SIZE}"
 
 
 def train(datapath):
-    script = "4_train_large.sh" if USE_LARGE_MODEL else "4_train_small.sh"
+    #script = "4_train_large.sh" if USE_LARGE_MODEL else "4_train_small.sh"
+    script = "4_train_cnn.sh"
     subprocess.call(['sh', f'./scripts/{script}', datapath, WANDB_PROJECT])
 
 
 if __name__ == "__main__":
     # Get all folders in the root path
     datasets = [os.path.join(DATASETS_PATH, TOK_FOLDER, x) for x in [
-        "europarl_fairseq_50k_de-en",
+        # "europarl_fairseq_conv_es-en",
+        "europarl_fairseq_50k_conv_es-en",
+
+        # "europarl_fairseq_50k_de-en",
         # "europarl_fairseq_50k_es-en",
         # "europarl_fairseq_50k_cs-en",
         # "europarl_fairseq_cs-en",

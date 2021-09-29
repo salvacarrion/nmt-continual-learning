@@ -53,13 +53,14 @@ def plot_tok_distribution(show_values=False, savepath="."):
     # Define subplots => px, py = w*dpi, h*dpi  # pixels
     print("Plotting...")
     fig, axes = plt.subplots(2, 1, figsize=(12*1.5, 6), dpi=150)  # (nrows, ncols), (W, H), dpi
+    plt.ylim([0, 5500000])
 
     # Image 0
-    axes[0].set_title(f"Large subword vocab distribution")
+    axes[0].set_title(f"Large subword vocab distribution (~32k tokens)")
     g0 = sns.barplot(ax=axes[0], data=df_src, x="subword", y="frequency")
 
     # Image 1
-    axes[1].set_title(f"Quasi character-level vocab distribution")
+    axes[1].set_title(f"Quasi character-level vocab distribution (~300 tokens)")
     g1 = sns.barplot(ax=axes[1], data=df_trg, x="subword", y="frequency")
 
     # Tweaks
@@ -69,13 +70,15 @@ def plot_tok_distribution(show_values=False, savepath="."):
         gx.tick_params(axis='x', which='major', labelsize=8)
         gx.tick_params(axis='y', which='major', labelsize=8)
         gx.yaxis.set_major_formatter(utils.human_format)
+        # gx.set_ylim([0, 5500000])
 
     # Set yaxis limits + tick frequency
-    g0.yaxis.set_ticks(np.arange(data_src[-1][1], data_src[0][1], 5e5))
-    g1.yaxis.set_ticks(np.arange(data_trg[-1][1], data_trg[0][1], 5e5))
+    # g0.yaxis.set_ticks(np.arange(data_src[-1][1], data_src[0][1], 5e5))
+    # g1.yaxis.set_ticks(np.arange(data_trg[-1][1], data_trg[0][1], 5e5))
+    g0.yaxis.set_ticks(np.arange(0, 5.5*1e6, 5e5))
+    g1.yaxis.set_ticks(np.arange(0, 5.5*1e6, 5e5))
 
     # properties
-    # plt.ylim([0, 50])
     plt.tight_layout()
 
     # Overall title
