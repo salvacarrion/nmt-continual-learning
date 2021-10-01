@@ -1,11 +1,11 @@
 import os
 import tqdm
 
-SRC = "cs"
+SRC = "es"
 TRG = "en"
 MAX_TOKENS_SENTENCE = 1000
-path_old = "/home/scarrion/datasets/scielo/constrained/datasets/bpe.64/europarl_fairseq_100k_cs-en/tok/bpe.64_old"
-path_new = "/home/scarrion/datasets/scielo/constrained/datasets/bpe.64/europarl_fairseq_100k_cs-en/tok/bpe.64"
+path_old = "/home/scarrion/datasets/scielo/constrained/datasets/bpe.64/europarl_fairseq_conv_es-en/tok/bpe.64_old"
+path_new = "/home/scarrion/datasets/scielo/constrained/datasets/bpe.64/europarl_fairseq_conv_es-en/tok/bpe.64"
 files = [(f"train.{SRC}", f"train.{TRG}"), (f"val.{SRC}", f"val.{TRG}"), (f"test.{SRC}", f"test.{TRG}")]
 
 for file_src, file_trg in files:

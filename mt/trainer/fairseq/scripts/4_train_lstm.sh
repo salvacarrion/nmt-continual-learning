@@ -14,10 +14,15 @@ echo $(which fairseq-train)
 #CUDA_VISIBLE_DEVICES=0
 fairseq-train \
     $BASE_PATH/data-bin \
-    --arch fconv_iwslt_de_en \
-    --dropout 0.1 \
-    --encoder-layers "[(256, 3)] * 6" \
-    --decoder-layers "[(256, 3)] * 6" \
+    --arch lstm_wiseman_iwslt_de_en \
+    --encoder-embed-dim 256 \
+    --encoder-hidden-size 256 \
+    --decoder-embed-dim 256 \
+    --decoder-hidden-size 256 \
+    --decoder-out-embed-dim 256 \
+    --encoder-layers 3 \
+    --decoder-layers 3 \
+    --encoder-bidirectional \
     --criterion cross_entropy \
     --lr 0.25 \
     --optimizer nag --clip-norm 0.1 \

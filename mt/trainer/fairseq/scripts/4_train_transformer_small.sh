@@ -14,8 +14,6 @@ echo $(which fairseq-train)
 fairseq-train \
     $BASE_PATH/data-bin \
     --arch transformer \
-    --optimizer adam \
-    --activation-fn relu \
     --encoder-embed-dim 256 \
     --decoder-embed-dim 256 \
     --encoder-layers 3 \
@@ -27,11 +25,11 @@ fairseq-train \
     --dropout	0.1 \
     --criterion cross_entropy \
     --max-tokens 4096 \
-    --max-epoch	50 \
     --seed 1234 \
-    --clip-norm 1.0 \
-    --lr 0.5e-3 \
-    --patience 5 \
+    --patience 10 \
+    --max-epoch	75 \
+    --lr 0.25 \
+    --optimizer nag --clip-norm 0.1 \
     --save-dir $BASE_PATH/checkpoints \
     --log-format simple \
     --no-epoch-checkpoints \
