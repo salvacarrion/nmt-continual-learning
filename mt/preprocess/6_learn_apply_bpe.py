@@ -11,7 +11,9 @@ SAVE_VOCABS = True
 
 # Get all folders in the root path
 datasets = [os.path.join(DATASETS_PATH, TOK_FOLDER, x) for x in [
-    "europarl_fairseq_50k_de-en",
+    "europarl_fairseq_es-en",
+
+    # "europarl_fairseq_50k_de-en",
     # "europarl_fairseq_50k_es-en",
     # "europarl_fairseq_50k_cs-en",
     # "europarl_fairseq_cs-en",

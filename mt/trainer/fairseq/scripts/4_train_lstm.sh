@@ -24,8 +24,8 @@ fairseq-train \
     --decoder-layers 3 \
     --encoder-bidirectional \
     --criterion cross_entropy \
-    --lr 0.25 \
-    --optimizer nag --clip-norm 0.1 \
+    --lr 0.35 \
+    --optimizer adam --clip-norm 1.0 \
     --max-tokens 4096 \
     --seed 1234 \
     --patience 10 \

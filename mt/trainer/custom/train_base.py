@@ -33,7 +33,7 @@ from torchnlp.samplers import BucketBatchSampler
 from mt.dataloaders.max_tokens_batch_sampler import MaxTokensBatchSampler
 
 MODEL_NAME = "transformer"
-WANDB_PROJECT = "nmt"  # Run "wandb login" in the terminal
+WANDB_PROJECT = "nmt2"  # Run "wandb login" in the terminal
 
 MAX_EPOCHS = 50
 LEARNING_RATE = 0.5e-3

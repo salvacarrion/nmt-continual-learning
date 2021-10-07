@@ -15,16 +15,17 @@ echo $(which fairseq-train)
 fairseq-train \
     $BASE_PATH/data-bin \
     --arch fconv_iwslt_de_en \
-    --dropout 0.1 \
+    --dropout 0.15 \
     --encoder-layers "[(256, 3)] * 6" \
     --decoder-layers "[(256, 3)] * 6" \
     --criterion cross_entropy \
-    --lr 0.25 \
-    --optimizer nag --clip-norm 0.1 \
+    --lr 0.20 \
+    --lr-scheduler fixed \
+    --optimizer nag --clip-norm 0.15 \
     --max-tokens 4096 \
     --seed 1234 \
     --patience 10 \
-    --max-epoch	75 \
+    --max-epoch	250 \
     --save-dir $BASE_PATH/checkpoints \
     --log-format simple \
     --no-epoch-checkpoints \
@@ -38,6 +39,11 @@ fairseq-train \
     --task translation \
     --num-workers $(nproc) \
     --wandb-project $WANDB_PROJECT \
+    --restore-file $BASE_PATH/checkpoints/123456.pt \
+    --reset-dataloader \
+    --reset-lr-scheduler \
+    --reset-meters \
+    --reset-optimizer \
 #    --ddp-backend=no_c10d \
 #    --ddp-backend=legacy_ddp \
 #    --ddp-backend=legacy_ddp \

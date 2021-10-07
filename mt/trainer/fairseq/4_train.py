@@ -6,28 +6,30 @@ from mt import utils
 from mt import DATASETS_PATH, DATASET_CLEAN_NAME, DATASET_CLEAN_SORTED_NAME, DATASET_TOK_NAME, DATASET_LOGS_NAME, DATASET_CHECKPOINT_NAME
 
 
-WANDB_PROJECT = "nmt"  # Run "wandb login" in the terminal
+WANDB_PROJECT = "nmt2"  # Run "wandb login" in the terminal
 
 TOK_MODEL = "bpe"  # wt
-TOK_SIZE = 32000
+TOK_SIZE = 64
 TOK_FOLDER = f"{TOK_MODEL}.{TOK_SIZE}"
 
 
 def train(datapath):
     # script = "4_train_transformer_small.sh"
     # script = "4_train_transformer_large.sh"
-    # script = "4_train_cnn.sh"
-    script = "4_train_lstm.sh"
+    script = "4_train_cnn.sh"
+    # script = "4_train_lstm.sh"
     subprocess.call(['sh', f'./scripts/{script}', datapath, WANDB_PROJECT])
 
 
 if __name__ == "__main__":
     # Get all folders in the root path
     datasets = [os.path.join(DATASETS_PATH, TOK_FOLDER, x) for x in [
-        # "europarl_fairseq_conv_es-en",  #
-        # "europarl_fairseq_50k_conv_es-en",
+        # "europarl_fairseq_large_es-en",  #
 
-        "europarl_fairseq_lstm_es-en", #
+        # "europarl_fairseq_conv_es-en",  #
+        "europarl_fairseq_50k_conv_es-en",
+
+        # "europarl_fairseq_lstm_es-en", #
         # "europarl_fairseq_50k_lstm_es-en",
 
         # "europarl_fairseq_transxs_es-en",

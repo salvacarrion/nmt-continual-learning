@@ -6,20 +6,20 @@ from fairseq.models.lstm import LSTMModel
 
 
 models = [
-"europarl_fairseq_lstm_es-en",
-"europarl_fairseq_50k_lstm_es-en",
-
-"europarl_fairseq_50k_conv_es-en",
-"europarl_fairseq_conv_es-en",
+# "europarl_fairseq_50k_lstm_es-en",
+# "europarl_fairseq_50k_conv_es-en",
+# "europarl_fairseq_50k_es-en",
+#
+# "europarl_fairseq_lstm_es-en",
+# "europarl_fairseq_conv_es-en",
+"europarl_fairseq_es-en_large",
 
 # "europarl_fairseq_50k_transxs_es-en",
-"europarl_fairseq_50k_es-en",
-"europarl_fairseq_es-en",
 ]
 
 summary = ""
-for bpe_size in [64, 32000]:
-    for fname in models:
+for fname in models:
+    for bpe_size in [64, 32000]:
         path = f"/home/scarrion/datasets/scielo/constrained/datasets/bpe.{bpe_size}/{fname}/"
 
         if "lstm" in path:

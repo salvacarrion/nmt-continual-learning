@@ -23,6 +23,8 @@ if __name__ == "__main__":
     # datasets = [os.path.join(DATASETS_PATH, x) for x in ["health_fairseq_es-en", "biological_fairseq_es-en", "merged_fairseq_es-en"]]
     # datasets = [os.path.join(DATASETS_PATH, x) for x in ["health_biological_fairseq_es-en"]]
     datasets = [os.path.join(DATASETS_PATH, TOK_FOLDER, x) for x in [
+        "europarl_fairseq_es-en",
+
         # "europarl_fairseq_lstm_es-en",
         # "europarl_fairseq_50k_lstm_es-en",
 
